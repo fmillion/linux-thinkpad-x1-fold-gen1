@@ -300,3 +300,25 @@ Patch series now (`patches/6.18.64/`): 0001–0002 upstream backports, 0003 ISH 
   `DOST`. `ECLT._REG` sets `ECLA` and runs `SDOS` but does **not** `Notify(DEVD)`. Fix: dock
   driver returns `-EPROBE_DEFER` while `\_SB.ECLT.ECLA == 0` (deferred probes are retried when
   eclite binds).
+
+### 11.1 s2idle on 6.18.64-fold — patch 0005 confirmed
+- LPS0 screen off/on now "Successfully transitioned" (both GUIDs), **no ECLite timeouts**.
+  Suspend (freeze → s2idle) ≈ 0.75 s, resume ≈ 0.5 s (was several seconds + errors).
+- Parameter path: `acpi_x86.lps0_screen_off_early` (−1 auto/DMI, 0 off, 1 on).
+
+### 11.2 Lid state across s2idle
+- `LID0._LID` returns cached NVS `LLDS`; refreshed only by ECLite event **0x26** → `UNLS`
+  (ECLite 0x162 bit `HPLD`, then `Notify(LID0, 0x80)`), and by `_WAK` for S3/S4 only (SMI).
+  s2idle never runs `_WAK`.
+- While awake, lid close/open each produce event 0x26 and logind sees them.
+- **Bug:** close → suspend → open while asleep: the open event never reaches the host because the
+  ISH is **not a wakeup source** (`/sys/bus/pci/devices/0000:00:12.0/power/wakeup = disabled`).
+  On resume (keypress) `LLDS` is still 0 → logind thinks lid closed → re-suspends after its
+  ~30 s holdoff, repeatedly.
+- With ISH wakeup enabled: system wakes on ECLite events (IRQ 26 `intel_ish_ipc`). First test woke
+  3.6 s after suspend on **event 0x11 = power-source change** (`PSRC` @0xD2, `PWRS`, `PWSC()`),
+  likely the USB-C dock renegotiating PD at suspend. Windows treats such wakes as "dark" and
+  re-enters standby; Linux fully resumes (logind re-suspends after holdoff if lid still closed).
+- Plan: (a) enable ISH wakeup by default (udev rule) so lid-open wakes; (b) on resume, resync lid
+  via `\_SB.LID0.UNLS` (from the Fold platform driver) so a missed event can't leave it stale;
+  (c) later: investigate filtering non-lid ECLite wakes (what Windows' eclite.sys does in standby).
