@@ -33,3 +33,12 @@ Conclusions:
 - Needed in i915: a Lakefield TC port definition (DDI D→TC1, DDI E→TC2), TC HPD (DE HPD block),
   FIA handling (alt-mode only; no TBT), and the TC PHY/PLL programming — likely Dekel, to be
   confirmed from the Windows driver (`igdkmdn64.sys`, captured) and the PHY window contents.
+
+## Warning: do not read the TC PHY space from userspace (hard hang, 2026-11-22)
+`tools/tc-phy-windows.py` (write `HIP_INDEX`, then read 0x168000–0x168fff for each window)
+**hung the machine with a corrupted display** on the first pass (TC1, no output written). At that
+point i915 held no AUX/TC power well and had not taken PHY ownership through the FIA
+(`DFLEXDPCSSS`), so the PHY block was most likely unpowered or owned by the PD side, and the
+accesses stalled the fabric. Only probe the PHY from inside i915, after the AUX power well is up
+and ownership is taken (the TGL `intel_tc` sequence). The script is kept only as a record of
+what not to do. PHY identification moves to static analysis of the Windows driver.
