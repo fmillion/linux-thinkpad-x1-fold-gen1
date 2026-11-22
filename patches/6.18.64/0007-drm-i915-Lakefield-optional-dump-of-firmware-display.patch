@@ -1,0 +1,117 @@
+From 4d5a4cef9dfa0482991fa1f10a39368a6bc20911 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 06:19:10 +0000
+Subject: [PATCH 07/19] drm/i915: Lakefield: optional dump of firmware display
+ state (lkf_dump)
+
+Bring-up aid: with i915.lkf_dump=1, log the display, DSI transcoder,
+MIPIO, combo PHY / MCD D-PHY, DPLL and SoC PWM backlight registers as the
+firmware left them, right after MMIO is mapped and before i915 programs
+anything. Read-only.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/i915_driver.c | 49 ++++++++++++++++++++++++++++++
+ drivers/gpu/drm/i915/i915_params.c |  4 +++
+ drivers/gpu/drm/i915/i915_params.h |  3 +-
+ 3 files changed, 55 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/i915/i915_driver.c b/drivers/gpu/drm/i915/i915_driver.c
+index fd282518c..52f885dec 100644
+--- a/drivers/gpu/drm/i915/i915_driver.c
++++ b/drivers/gpu/drm/i915/i915_driver.c
+@@ -310,6 +310,52 @@ static void i915_driver_late_release(struct drm_i915_private *dev_priv)
+  * side effects or exposing the driver via kernel internal or user space
+  * interfaces.
+  */
++/*
++ * Lakefield bring-up aid: log the display state the firmware (GOP) left
++ * behind, before i915 programs anything. This is the reference for the
++ * panel-specific MCD D-PHY lane values. Plain MMIO reads of display
++ * registers only (no forcewake needed, nothing written).
++ */
++static void lkf_dump_firmware_display_state(struct drm_i915_private *i915)
++{
++	static const struct { u32 start, end; const char *what; } ranges[] = {
++		{ 0x042000, 0x042004, "fuse status" },
++		{ 0x045400, 0x045460, "power well ctl" },
++		{ 0x046000, 0x046080, "cdclk / dpll enable" },
++		{ 0x060000, 0x060040, "transcoder A timings" },
++		{ 0x064000, 0x064010, "DDI_BUF_CTL A" },
++		{ 0x070000, 0x070020, "pipe A" },
++		{ 0x070180, 0x0701c0, "plane 1A" },
++		{ 0x06b000, 0x06b700, "DSI transcoder 0" },
++		{ 0x0c8250, 0x0c8260, "SoC PWM backlight 1" },
++		{ 0x0c8350, 0x0c8360, "SoC PWM backlight 2" },
++		{ 0x160000, 0x160100, "MIPIO escape clocks" },
++		{ 0x162000, 0x162c00, "combo PHY A / MCD D-PHY" },
++		{ 0x164000, 0x164300, "DPLL cfgcr / DPCLKA" },
++	};
++	void __iomem *regs = to_gt(i915)->uncore->regs;
++	int r;
++
++	drm_info(&i915->drm, "lkf-dump: begin\n");
++	for (r = 0; r < ARRAY_SIZE(ranges); r++) {
++		u32 off;
++
++		drm_info(&i915->drm, "lkf-dump: # %s\n", ranges[r].what);
++		for (off = ranges[r].start; off < ranges[r].end; off += 0x20) {
++			u32 v[8];
++			int i;
++
++			for (i = 0; i < 8; i++)
++				v[i] = off + 4 * i < ranges[r].end ?
++					readl(regs + off + 4 * i) : 0;
++			drm_info(&i915->drm,
++				 "lkf-dump: %06x: %08x %08x %08x %08x %08x %08x %08x %08x\n",
++				 off, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]);
++		}
++	}
++	drm_info(&i915->drm, "lkf-dump: end\n");
++}
++
+ static int i915_driver_mmio_probe(struct drm_i915_private *dev_priv)
+ {
+ 	struct intel_display *display = dev_priv->display;
+@@ -335,6 +381,9 @@ static int i915_driver_mmio_probe(struct drm_i915_private *dev_priv)
+ 			return ret;
+ 	}
+ 
++	if (IS_LAKEFIELD_PCI(dev_priv) && dev_priv->params.lkf_dump)
++		lkf_dump_firmware_display_state(dev_priv);
++
+ 	/* Try to make sure MCHBAR is enabled before poking at it */
+ 	intel_gmch_bar_setup(dev_priv);
+ 	intel_device_info_runtime_init(dev_priv);
+diff --git a/drivers/gpu/drm/i915/i915_params.c b/drivers/gpu/drm/i915/i915_params.c
+index 3965cdc45..6908f338b 100644
+--- a/drivers/gpu/drm/i915/i915_params.c
++++ b/drivers/gpu/drm/i915/i915_params.c
+@@ -96,6 +96,10 @@ i915_param_named_unsafe(lkf_display, bool, 0400,
+ 	"Lakefield: drive the display with i915 (experimental). "
+ 	"Default: render/media only, the firmware framebuffer stays on simpledrm.");
+ 
++i915_param_named_unsafe(lkf_dump, bool, 0400,
++	"Lakefield: log the firmware-programmed display/DSI/D-PHY register state "
++	"at probe, before i915 touches the display (debug, read-only)");
++
+ i915_param_named_unsafe(lkf_chipset_id, uint, 0400,
+ 	"Lakefield: PCI device ID reported by I915_PARAM_CHIPSET_ID "
+ 	"(0 = real ID [default]; e.g. 0x4e71 for userspace that does not know 0x9840 yet)");
+diff --git a/drivers/gpu/drm/i915/i915_params.h b/drivers/gpu/drm/i915/i915_params.h
+index 4aab15110..6cd6e7e5d 100644
+--- a/drivers/gpu/drm/i915/i915_params.h
++++ b/drivers/gpu/drm/i915/i915_params.h
+@@ -66,7 +66,8 @@ struct drm_printer;
+ 	param(bool, error_capture, true, IS_ENABLED(CONFIG_DRM_I915_CAPTURE_ERROR) ? 0600 : 0) \
+ 	param(bool, enable_gvt, false, IS_ENABLED(CONFIG_DRM_I915_GVT) ? 0400 : 0) \
+ 	param(bool, enable_debug_only_api, false, IS_ENABLED(CONFIG_DRM_I915_REPLAY_GPU_HANGS_API) ? 0400 : 0) \
+-	param(bool, lkf_display, false, 0400)
++	param(bool, lkf_display, false, 0400) \
++	param(bool, lkf_dump, false, 0400)
+ 
+ #define MEMBER(T, member, ...) T member;
+ struct i915_params {
+-- 
+2.56.1
+

@@ -1,0 +1,40 @@
+From ca9d7175f54646c1118efbde112533001bcdce64 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 06:53:09 +0000
+Subject: [PATCH 17/19] drm/i915/pps: Lakefield: use the PCH panel power
+ sequencer base
+
+Lakefield is driven with the Elkhart Lake display info but has no PCH,
+so intel_pps_setup() picked the legacy 0x61200 PPS block, which is not
+implemented here ("Unclaimed read from register 0x61204" when the DSI
+power sequence toggles AVDD/backlight enable). Like the other PCH-less
+SoCs (BXT/GLK), its sequencer lives at the PCH offset 0xc7200, where the
+firmware leaves PP_STATUS/PP_CONTROL = 0x80000008/0x7.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_pps.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_pps.c b/drivers/gpu/drm/i915/display/intel_pps.c
+index 327e0de86..46ed823f5 100644
+--- a/drivers/gpu/drm/i915/display/intel_pps.c
++++ b/drivers/gpu/drm/i915/display/intel_pps.c
+@@ -1796,7 +1796,13 @@ void intel_pps_unlock_regs_wa(struct intel_display *display)
+ 
+ void intel_pps_setup(struct intel_display *display)
+ {
+-	if (HAS_PCH_SPLIT(display) || display->platform.geminilake || display->platform.broxton)
++	if (HAS_PCH_SPLIT(display) || display->platform.geminilake || display->platform.broxton ||
++	    /*
++	     * Lakefield (driven as Elkhart Lake, but with no PCH): like the
++	     * other PCH-less SoCs its panel power sequencer is at the PCH
++	     * offset; the legacy 0x61200 block is not implemented.
++	     */
++	    (display->platform.elkhartlake && INTEL_PCH_TYPE(display) == PCH_NONE))
+ 		display->pps.mmio_base = PCH_PPS_BASE;
+ 	else if (display->platform.valleyview || display->platform.cherryview)
+ 		display->pps.mmio_base = VLV_PPS_BASE;
+-- 
+2.56.1
+

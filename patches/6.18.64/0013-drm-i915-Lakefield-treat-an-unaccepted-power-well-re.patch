@@ -1,0 +1,47 @@
+From fb0472f5d44f71d38965fdafcdeda8b0d3c59058 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 06:23:50 +0000
+Subject: [PATCH 13/19] drm/i915: Lakefield: treat an unaccepted power well
+ request as an absent gate
+
+Lakefield's PW_2 is fused off (fuse status 0x8d800000 on the ThinkPad X1
+Fold Gen 1, same as the Galaxy Book S): the enable request never sticks.
+Ported to 6.18 from the Lakefield kernel fixes series and limited to
+Lakefield.
+
+Link: https://github.com/Independent-Scientist/lakefield-kernel-fixes
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../drm/i915/display/intel_display_power_well.c  | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display_power_well.c b/drivers/gpu/drm/i915/display/intel_display_power_well.c
+index 5b7152cf3..27c4f0f91 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_power_well.c
++++ b/drivers/gpu/drm/i915/display/intel_display_power_well.c
+@@ -293,6 +293,22 @@ static void hsw_wait_for_power_well_enable(struct intel_display *display,
+ 	/* Timeout for PW1:10 us, AUX:not specified, other PWs:20 us. */
+ 	if (intel_de_wait_for_set(display, regs->driver,
+ 				  HSW_PWR_WELL_CTL_STATE(pw_idx), timeout)) {
++		/*
++		 * Lakefield: PW_2 is fused off and never accepts its enable
++		 * request - HSW_PWR_WELL_CTL_REQ() does not stick - while the
++		 * other wells set REQ and STATE. Treat a request the hardware
++		 * refuses as an absent gate rather than a timeout. Do not use
++		 * SKL_FUSE_PG_DIST_STATUS for this: it also reads 0 for a gate
++		 * that is merely powered off.
++		 */
++		if (to_pci_dev(display->drm->dev)->device == 0x9840 &&
++		    !(intel_de_read(display, regs->driver) & HSW_PWR_WELL_CTL_REQ(pw_idx))) {
++			drm_dbg_kms(display->drm,
++				    "%s: enable request not accepted, gate absent on this SKU\n",
++				    intel_power_well_name(power_well));
++			return;
++		}
++
+ 		drm_dbg_kms(display->drm, "%s power well enable timeout\n",
+ 			    intel_power_well_name(power_well));
+ 
+-- 
+2.56.1
+

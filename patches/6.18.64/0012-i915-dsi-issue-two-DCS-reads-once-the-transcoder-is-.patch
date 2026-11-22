@@ -1,0 +1,59 @@
+From cf4a292589b4ef2f63cedf22a2b43c4f22e400df Mon Sep 17 00:00:00 2001
+From: Lakefield kernel fixes <lakefield@example.invalid>
+Date: Tue, 17 Nov 2026 05:08:46 -0300
+Subject: [PATCH 12/19] i915/dsi: issue two DCS reads once the transcoder is
+ programmed
+
+Lakefield's panel comes up with these two transactions on the link and
+stays black without them. gen11_dsi_host_transfer() has no payload-receive
+path, so the reads never return data - the transaction and its turnaround
+delay appear to be what the panel power sequence needs.
+
+Placed immediately after gen11_dsi_set_transcoder_timings() in
+gen11_dsi_pre_enable(). The evidence is not isolated: the build without
+them also had the backlight at 0, so this is kept until someone re-tests
+the pair properly rather than dropped as redundant.
+---
+ drivers/gpu/drm/i915/display/icl_dsi.c | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/icl_dsi.c b/drivers/gpu/drm/i915/display/icl_dsi.c
+index 951f30a64..1ac6a1433 100644
+--- a/drivers/gpu/drm/i915/display/icl_dsi.c
++++ b/drivers/gpu/drm/i915/display/icl_dsi.c
+@@ -1234,6 +1234,32 @@ static void gen11_dsi_pre_enable(struct intel_atomic_state *state,
+ 
+ 	/* step6c: configure transcoder timings */
+ 	gen11_dsi_set_transcoder_timings(encoder, pipe_config);
++
++	/*
++	 * Put two DCS reads on the link now that the transcoder is programmed.
++	 *
++	 * gen11_dsi_host_transfer() ends with "TODO: add payload receive code",
++	 * so mipi_dsi_dcs_read() never returns panel data - what matters is the
++	 * transaction and its turnaround delay. On this panel the build with
++	 * these reads lights the display and a build without them did not; that
++	 * comparison was not clean (the second build also had the backlight at
++	 * 0), so treat them as required until someone isolates it properly.
++	 */
++	{
++		struct intel_dsi *intel_dsi = enc_to_intel_dsi(encoder);
++		enum port port;
++
++		for_each_dsi_port(port, intel_dsi->ports) {
++			struct mipi_dsi_device *dsi_device =
++				intel_dsi->dsi_hosts[port]->device;
++			u8 data;
++
++			(void)mipi_dsi_dcs_read(dsi_device,
++						0x0a /* GET_POWER_MODE */, &data, 1);
++			(void)mipi_dsi_dcs_read(dsi_device,
++						0x04 /* GET_DISPLAY_ID */, &data, 1);
++		}
++	}
+ }
+ 
+ /*
+-- 
+2.56.1
+

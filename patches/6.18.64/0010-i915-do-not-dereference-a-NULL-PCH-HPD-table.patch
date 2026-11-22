@@ -1,0 +1,52 @@
+From b6f918e58bc5d198553ceb1c5491bcaaed854eb5 Mon Sep 17 00:00:00 2001
+From: Lakefield kernel fixes <lakefield@example.invalid>
+Date: Tue, 17 Nov 2026 05:08:46 -0300
+Subject: [PATCH 10/19] i915: do not dereference a NULL PCH HPD table
+
+On a PCH-less Gen11+ SoC, intel_hotplug_irq_init() assigns hpd_gen11 but
+returns before filling in hotplug.pch_hpd. DDI init still publishes
+lpt_digital_port_connected() for every Gen11+ non-TC port, and that reads
+display->hotplug.pch_hpd[hpd_pin] - a NULL dereference at address 0x10
+that oopses during modeset.
+
+There is no south HPD register to fall back to on Lakefield: DEISR
+(0x44000) is not implemented and reading it only logs "Unclaimed read
+from register 0x44000". Report the port as disconnected instead.
+---
+ drivers/gpu/drm/i915/display/intel_ddi.c | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_ddi.c b/drivers/gpu/drm/i915/display/intel_ddi.c
+index 3de3e9167..59f89f19e 100644
+--- a/drivers/gpu/drm/i915/display/intel_ddi.c
++++ b/drivers/gpu/drm/i915/display/intel_ddi.c
+@@ -4815,7 +4815,25 @@ intel_ddi_hotplug(struct intel_encoder *encoder,
+ static bool lpt_digital_port_connected(struct intel_encoder *encoder)
+ {
+ 	struct intel_display *display = to_intel_display(encoder);
+-	u32 bit = display->hotplug.pch_hpd[encoder->hpd_pin];
++	u32 bit;
++
++	/*
++	 * Lakefield is a PCH-less Gen11+ SoC. intel_hotplug_irq_init() assigns
++	 * hpd_gen11 but returns before filling in pch_hpd when there is no PCH
++	 * split, so pch_hpd is NULL here and indexing it faults at address 0x10.
++	 *
++	 * DEISR (0x44000) is not implemented on this part either - reading it
++	 * only produces "Unclaimed read from register 0x44000" - so there is no
++	 * south HPD register to fall back to. Report the port as disconnected;
++	 * the internal panel does not use HPD.
++	 */
++	if (!display->hotplug.pch_hpd) {
++		drm_dbg_kms(display->drm,
++			    "no PCH HPD block, treating port as disconnected\n");
++		return false;
++	}
++
++	bit = display->hotplug.pch_hpd[encoder->hpd_pin];
+ 
+ 	return intel_de_read(display, SDEISR) & bit;
+ }
+-- 
+2.56.1
+

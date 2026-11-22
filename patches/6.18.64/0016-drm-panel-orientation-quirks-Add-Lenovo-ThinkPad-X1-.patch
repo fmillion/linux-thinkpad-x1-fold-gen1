@@ -1,0 +1,52 @@
+From 93a3fd68de57dfa7b81ae07c4d1a065f8d4d4bf0 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 06:41:54 +0000
+Subject: [PATCH 16/19] drm: panel-orientation-quirks: Add Lenovo ThinkPad X1
+ Fold Gen 1
+
+The 1536x2048 OLED of the ThinkPad X1 Fold Gen 1 is mounted upside
+down; the firmware hides this by scanning out with a 180 degree plane
+rotation. Report the panel as bottom-up so fbcon and compositors rotate
+the image.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/drm_panel_orientation_quirks.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/drivers/gpu/drm/drm_panel_orientation_quirks.c b/drivers/gpu/drm/drm_panel_orientation_quirks.c
+index 3a218fb59..c03bfc257 100644
+--- a/drivers/gpu/drm/drm_panel_orientation_quirks.c
++++ b/drivers/gpu/drm/drm_panel_orientation_quirks.c
+@@ -160,6 +160,12 @@ static const struct drm_dmi_panel_orientation_data lcd1600x2560_rightside_up = {
+ 	.orientation = DRM_MODE_PANEL_ORIENTATION_RIGHT_UP,
+ };
+ 
++static const struct drm_dmi_panel_orientation_data lcd1536x2048_bottom_up = {
++	.width = 1536,
++	.height = 2048,
++	.orientation = DRM_MODE_PANEL_ORIENTATION_BOTTOM_UP,
++};
++
+ static const struct dmi_system_id orientation_data[] = {
+ 	{	/* Acer One 10 (S1003) */
+ 		.matches = {
+@@ -427,6 +433,15 @@ static const struct dmi_system_id orientation_data[] = {
+ 		  DMI_EXACT_MATCH(DMI_PRODUCT_VERSION, "Legion Go 8APU1"),
+ 		},
+ 		.driver_data = (void *)&lcd1600x2560_leftside_up,
++	}, {	/*
++		 * Lenovo ThinkPad X1 Fold Gen 1: the 1536x2048 OLED is mounted
++		 * upside down; the firmware scans out with PLANE_CTL rotation 180.
++		 */
++		.matches = {
++		  DMI_EXACT_MATCH(DMI_SYS_VENDOR, "LENOVO"),
++		  DMI_EXACT_MATCH(DMI_PRODUCT_FAMILY, "ThinkPad X1 Fold Gen 1"),
++		},
++		.driver_data = (void *)&lcd1536x2048_bottom_up,
+ 	}, {	/* Lenovo Yoga Book X90F / X90L */
+ 		.matches = {
+ 		  DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Intel Corporation"),
+-- 
+2.56.1
+

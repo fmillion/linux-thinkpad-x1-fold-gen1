@@ -1,0 +1,47 @@
+From 42cea90b28b696aec2ac725060413f2ebe940f89 Mon Sep 17 00:00:00 2001
+From: Lakefield kernel fixes <lakefield@example.invalid>
+Date: Tue, 17 Nov 2026 05:08:46 -0300
+Subject: [PATCH 09/19] i915: use the SoC PWM backlight on PCH-less Elkhart
+ Lake
+
+Lakefield is an EHL derivative with PCH_NONE. intel_backlight_init_funcs()
+gives GLK/BXT the SoC PWM backend and PCH_CNP+ the PCH one; EHL falls
+through to the legacy i9xx tables, which touch PCH backlight registers
+that do not exist here. Result: "Unclaimed read from register 0x61254"
+and a backlight that never changes, which reads as a dark panel.
+
+Route EHL with PCH_NONE to bxt_pwm_funcs. The BXT SoC PWM registers
+(0xC8250/54/58) do land on this silicon and max_brightness reports 6400
+instead of 1000 once the switch takes effect.
+---
+ drivers/gpu/drm/i915/display/intel_backlight.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_backlight.c b/drivers/gpu/drm/i915/display/intel_backlight.c
+index 3b14f9298..04297a0c5 100644
+--- a/drivers/gpu/drm/i915/display/intel_backlight.c
++++ b/drivers/gpu/drm/i915/display/intel_backlight.c
+@@ -1821,7 +1821,19 @@ void intel_backlight_init_funcs(struct intel_panel *panel)
+ 	    intel_dsi_dcs_init_backlight_funcs(connector) == 0)
+ 		return;
+ 
+-	if (display->platform.geminilake || display->platform.broxton) {
++	if (display->platform.geminilake || display->platform.broxton ||
++	    /*
++	     * Lakefield is an Elkhart Lake derivative with no PCH at all.
++	     * Upstream assumes EHL boards carry an MCC/JSP PCH and routes
++	     * them to the PCH PWM registers, but with
++	     * INTEL_PCH_TYPE() == PCH_NONE execution falls through to the
++	     * legacy i9xx tables, which touch registers that do not exist
++	     * here ("Unclaimed read from register 0x61254") and leave the
++	     * backlight stuck. Use the SoC PWM this silicon does have;
++	     * max_brightness then reads 6400 instead of 1000.
++	     */
++	    (display->platform.elkhartlake &&
++	     INTEL_PCH_TYPE(display) == PCH_NONE)) {
+ 		panel->backlight.pwm_funcs = &bxt_pwm_funcs;
+ 	} else if (INTEL_PCH_TYPE(display) >= PCH_CNP) {
+ 		panel->backlight.pwm_funcs = &cnp_pwm_funcs;
+-- 
+2.56.1
+

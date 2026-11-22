@@ -1,0 +1,137 @@
+From c8810a54c877d4c9af74217e3affdbfd1445c885 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 06:23:16 +0000
+Subject: [PATCH 08/19] drm/i915: Lakefield: optional i915 display via
+ i915.lkf_display
+
+Add the Lakefield ID to the display device table (driven with the EHL
+descriptor) but only use it when i915.lkf_display=1; by default the
+display stays on the firmware framebuffer. i915 core now derives the
+render-only mode from the display probe result instead of its own
+parameter.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_display_device.c | 8 ++++++++
+ drivers/gpu/drm/i915/display/intel_display_params.c | 4 ++++
+ drivers/gpu/drm/i915/display/intel_display_params.h | 1 +
+ drivers/gpu/drm/i915/i915_driver.c                  | 6 ++++++
+ drivers/gpu/drm/i915/i915_drv.h                     | 3 ++-
+ drivers/gpu/drm/i915/i915_params.c                  | 4 ----
+ drivers/gpu/drm/i915/i915_params.h                  | 1 -
+ 7 files changed, 21 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display_device.c b/drivers/gpu/drm/i915/display/intel_display_device.c
+index d94f07bda..469029a30 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_device.c
++++ b/drivers/gpu/drm/i915/display/intel_display_device.c
+@@ -1478,6 +1478,8 @@ static const struct {
+ 	INTEL_CML_IDS(INTEL_DISPLAY_DEVICE, &cml_desc),
+ 	INTEL_ICL_IDS(INTEL_DISPLAY_DEVICE, &icl_desc),
+ 	INTEL_EHL_IDS(INTEL_DISPLAY_DEVICE, &ehl_desc),
++	/* Lakefield: Gen11.5 display driven as EHL, only with lkf_display=1 */
++	INTEL_LKF_IDS(INTEL_DISPLAY_DEVICE, &ehl_desc),
+ 	INTEL_JSL_IDS(INTEL_DISPLAY_DEVICE, &jsl_desc),
+ 	INTEL_TGL_IDS(INTEL_DISPLAY_DEVICE, &tgl_desc),
+ 	INTEL_DG1_IDS(INTEL_DISPLAY_DEVICE, &dg1_desc),
+@@ -1678,6 +1680,12 @@ struct intel_display *intel_display_device_probe(struct pci_dev *pdev)
+ 		goto no_display;
+ 	}
+ 
++	if (pdev->device == 0x9840 && !display->params.lkf_display) {
++		drm_info(display->drm,
++			 "Lakefield: display left to the firmware framebuffer (i915.lkf_display=0)\n");
++		goto no_display;
++	}
++
+ 	info = desc->info;
+ 	if (!info)
+ 		info = probe_gmdid_display(display, &ip_ver);
+diff --git a/drivers/gpu/drm/i915/display/intel_display_params.c b/drivers/gpu/drm/i915/display/intel_display_params.c
+index 2aed110c5..c3bce8a20 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_params.c
++++ b/drivers/gpu/drm/i915/display/intel_display_params.c
+@@ -134,6 +134,10 @@ intel_display_param_named_unsafe(enable_psr2_sel_fetch, bool, 0400,
+ 	"(0=disabled, 1=enabled) "
+ 	"Default: 1");
+ 
++intel_display_param_named_unsafe(lkf_display, bool, 0400,
++	"Lakefield (8086:9840): drive the display with i915 (experimental). "
++	"Default: render/media only; the firmware framebuffer stays on simpledrm.");
++
+ intel_display_param_named_unsafe(enable_dmc_wl, int, 0400,
+ 	"Enable DMC wakelock "
+ 	"(-1=use per-chip default, 0=disabled, 1=enabled, 2=match any register, 3=always locked) "
+diff --git a/drivers/gpu/drm/i915/display/intel_display_params.h b/drivers/gpu/drm/i915/display/intel_display_params.h
+index b01bc5700..1a5dc2e0d 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_params.h
++++ b/drivers/gpu/drm/i915/display/intel_display_params.h
+@@ -50,6 +50,7 @@ struct drm_printer;
+ 	param(bool, psr_safest_params, false, 0400) \
+ 	param(bool, enable_psr2_sel_fetch, true, 0400) \
+ 	param(int, enable_dmc_wl, -1, 0400) \
++	param(bool, lkf_display, false, 0400) \
+ 
+ #define MEMBER(T, member, ...) T member;
+ struct intel_display_params {
+diff --git a/drivers/gpu/drm/i915/i915_driver.c b/drivers/gpu/drm/i915/i915_driver.c
+index 52f885dec..886e6624c 100644
+--- a/drivers/gpu/drm/i915/i915_driver.c
++++ b/drivers/gpu/drm/i915/i915_driver.c
+@@ -310,6 +310,12 @@ static void i915_driver_late_release(struct drm_i915_private *dev_priv)
+  * side effects or exposing the driver via kernel internal or user space
+  * interfaces.
+  */
++/* Lakefield with the display left to simpledrm (see i915.lkf_display). */
++bool i915_lkf_render_only(struct drm_i915_private *i915)
++{
++	return IS_LAKEFIELD_PCI(i915) && !HAS_DISPLAY(i915->display);
++}
++
+ /*
+  * Lakefield bring-up aid: log the display state the firmware (GOP) left
+  * behind, before i915 programs anything. This is the reference for the
+diff --git a/drivers/gpu/drm/i915/i915_drv.h b/drivers/gpu/drm/i915/i915_drv.h
+index 58014639c..5207a5e83 100644
+--- a/drivers/gpu/drm/i915/i915_drv.h
++++ b/drivers/gpu/drm/i915/i915_drv.h
+@@ -456,7 +456,8 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
+  * and media only and leaves the firmware framebuffer (simpledrm) alone.
+  */
+ #define IS_LAKEFIELD_PCI(i915)	(to_pci_dev((i915)->drm.dev)->device == 0x9840)
+-#define LKF_RENDER_ONLY(i915)	(IS_LAKEFIELD_PCI(i915) && !(i915)->params.lkf_display)
++bool i915_lkf_render_only(struct drm_i915_private *i915);
++#define LKF_RENDER_ONLY(i915)	i915_lkf_render_only(i915)
+ 
+ #define IS_I830(i915)	IS_PLATFORM(i915, INTEL_I830)
+ #define IS_I845G(i915)	IS_PLATFORM(i915, INTEL_I845G)
+diff --git a/drivers/gpu/drm/i915/i915_params.c b/drivers/gpu/drm/i915/i915_params.c
+index 6908f338b..4228410b9 100644
+--- a/drivers/gpu/drm/i915/i915_params.c
++++ b/drivers/gpu/drm/i915/i915_params.c
+@@ -92,10 +92,6 @@ i915_param_named(mmio_debug, int, 0400,
+ 	"Enable the MMIO debug code for the first N failures (default: off). "
+ 	"This may negatively affect performance.");
+ 
+-i915_param_named_unsafe(lkf_display, bool, 0400,
+-	"Lakefield: drive the display with i915 (experimental). "
+-	"Default: render/media only, the firmware framebuffer stays on simpledrm.");
+-
+ i915_param_named_unsafe(lkf_dump, bool, 0400,
+ 	"Lakefield: log the firmware-programmed display/DSI/D-PHY register state "
+ 	"at probe, before i915 touches the display (debug, read-only)");
+diff --git a/drivers/gpu/drm/i915/i915_params.h b/drivers/gpu/drm/i915/i915_params.h
+index 6cd6e7e5d..c735b6447 100644
+--- a/drivers/gpu/drm/i915/i915_params.h
++++ b/drivers/gpu/drm/i915/i915_params.h
+@@ -66,7 +66,6 @@ struct drm_printer;
+ 	param(bool, error_capture, true, IS_ENABLED(CONFIG_DRM_I915_CAPTURE_ERROR) ? 0600 : 0) \
+ 	param(bool, enable_gvt, false, IS_ENABLED(CONFIG_DRM_I915_GVT) ? 0400 : 0) \
+ 	param(bool, enable_debug_only_api, false, IS_ENABLED(CONFIG_DRM_I915_REPLAY_GPU_HANGS_API) ? 0400 : 0) \
+-	param(bool, lkf_display, false, 0400) \
+ 	param(bool, lkf_dump, false, 0400)
+ 
+ #define MEMBER(T, member, ...) T member;
+-- 
+2.56.1
+

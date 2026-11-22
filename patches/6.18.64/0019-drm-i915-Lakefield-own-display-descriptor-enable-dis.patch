@@ -1,0 +1,139 @@
+From 0b65d9efa8686f846822c1766b3b69584ac09fbf Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 07:07:11 +0000
+Subject: [PATCH 19/19] drm/i915: Lakefield: own display descriptor, enable
+ display on validated machines
+
+Use a Lakefield display descriptor (EHL code paths) without the eDP
+transcoder, whose registers are not implemented (unclaimed reads of
+TRANS_DDI_FUNC_CTL 0x6f400). Make i915.lkf_display a tri-state that
+defaults to auto: i915 drives the display on machines where this has
+been validated (ThinkPad X1 Fold Gen 1) and stays render/media-only
+elsewhere.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../drm/i915/display/intel_display_device.c   | 45 +++++++++++++++++--
+ .../drm/i915/display/intel_display_params.c   |  7 +--
+ .../drm/i915/display/intel_display_params.h   |  2 +-
+ 3 files changed, 47 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display_device.c b/drivers/gpu/drm/i915/display/intel_display_device.c
+index 469029a30..d46a9cd32 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_device.c
++++ b/drivers/gpu/drm/i915/display/intel_display_device.c
+@@ -3,6 +3,7 @@
+  * Copyright © 2023 Intel Corporation
+  */
+ 
++#include <linux/dmi.h>
+ #include <linux/pci.h>
+ 
+ #include <drm/drm_color_mgmt.h>
+@@ -956,6 +957,25 @@ static const struct platform_desc ehl_desc = {
+ 	STEP_INFO(jsl_ehl_steppings),
+ };
+ 
++/*
++ * Lakefield: Gen11 display driven with the Elkhart Lake code paths, but
++ * without the eDP transcoder (its registers are not implemented).
++ */
++static const struct intel_display_device_info lkf_display = {
++	ICL_DISPLAY,
++
++	.__runtime_defaults.port_mask = BIT(PORT_A) | BIT(PORT_B) | BIT(PORT_C) | BIT(PORT_D),
++	.__runtime_defaults.cpu_transcoder_mask =
++		BIT(TRANSCODER_A) | BIT(TRANSCODER_B) | BIT(TRANSCODER_C) |
++		BIT(TRANSCODER_DSI_0) | BIT(TRANSCODER_DSI_1),
++};
++
++static const struct platform_desc lkf_desc = {
++	PLATFORM(elkhartlake),
++	.info = &lkf_display,
++	STEP_INFO(jsl_ehl_steppings),
++};
++
+ #define XE_D_DISPLAY \
+ 	.abox_mask = GENMASK(2, 1), \
+ 	.dbuf.size = 2048, \
+@@ -1479,7 +1499,7 @@ static const struct {
+ 	INTEL_ICL_IDS(INTEL_DISPLAY_DEVICE, &icl_desc),
+ 	INTEL_EHL_IDS(INTEL_DISPLAY_DEVICE, &ehl_desc),
+ 	/* Lakefield: Gen11.5 display driven as EHL, only with lkf_display=1 */
+-	INTEL_LKF_IDS(INTEL_DISPLAY_DEVICE, &ehl_desc),
++	INTEL_LKF_IDS(INTEL_DISPLAY_DEVICE, &lkf_desc),
+ 	INTEL_JSL_IDS(INTEL_DISPLAY_DEVICE, &jsl_desc),
+ 	INTEL_TGL_IDS(INTEL_DISPLAY_DEVICE, &tgl_desc),
+ 	INTEL_DG1_IDS(INTEL_DISPLAY_DEVICE, &dg1_desc),
+@@ -1649,6 +1669,25 @@ static void display_platforms_or(struct intel_display_platforms *dst,
+ 	bitmap_or(dst->bitmap, dst->bitmap, src->bitmap, display_platforms_num_bits());
+ }
+ 
++/* Lakefield machines on which i915 display support has been validated */
++static const struct dmi_system_id lkf_display_validated[] = {
++	{
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
++			DMI_MATCH(DMI_PRODUCT_FAMILY, "ThinkPad X1 Fold Gen 1"),
++		},
++	},
++	{ }
++};
++
++static bool lkf_display_enabled(struct intel_display *display)
++{
++	if (display->params.lkf_display >= 0)
++		return display->params.lkf_display;
++
++	return dmi_check_system(lkf_display_validated);
++}
++
+ struct intel_display *intel_display_device_probe(struct pci_dev *pdev)
+ {
+ 	struct intel_display *display;
+@@ -1680,9 +1719,9 @@ struct intel_display *intel_display_device_probe(struct pci_dev *pdev)
+ 		goto no_display;
+ 	}
+ 
+-	if (pdev->device == 0x9840 && !display->params.lkf_display) {
++	if (pdev->device == 0x9840 && !lkf_display_enabled(display)) {
+ 		drm_info(display->drm,
+-			 "Lakefield: display left to the firmware framebuffer (i915.lkf_display=0)\n");
++			 "Lakefield: display left to the firmware framebuffer (i915.lkf_display)\n");
+ 		goto no_display;
+ 	}
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_display_params.c b/drivers/gpu/drm/i915/display/intel_display_params.c
+index c3bce8a20..abee689fe 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_params.c
++++ b/drivers/gpu/drm/i915/display/intel_display_params.c
+@@ -134,9 +134,10 @@ intel_display_param_named_unsafe(enable_psr2_sel_fetch, bool, 0400,
+ 	"(0=disabled, 1=enabled) "
+ 	"Default: 1");
+ 
+-intel_display_param_named_unsafe(lkf_display, bool, 0400,
+-	"Lakefield (8086:9840): drive the display with i915 (experimental). "
+-	"Default: render/media only; the firmware framebuffer stays on simpledrm.");
++intel_display_param_named_unsafe(lkf_display, int, 0400,
++	"Lakefield (8086:9840): drive the display with i915 "
++	"(-1 = auto [default]: on for validated machines (ThinkPad X1 Fold Gen 1), "
++	"0 = render/media only, firmware framebuffer stays on simpledrm, 1 = on)");
+ 
+ intel_display_param_named_unsafe(enable_dmc_wl, int, 0400,
+ 	"Enable DMC wakelock "
+diff --git a/drivers/gpu/drm/i915/display/intel_display_params.h b/drivers/gpu/drm/i915/display/intel_display_params.h
+index 1a5dc2e0d..a633560dc 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_params.h
++++ b/drivers/gpu/drm/i915/display/intel_display_params.h
+@@ -50,7 +50,7 @@ struct drm_printer;
+ 	param(bool, psr_safest_params, false, 0400) \
+ 	param(bool, enable_psr2_sel_fetch, true, 0400) \
+ 	param(int, enable_dmc_wl, -1, 0400) \
+-	param(bool, lkf_display, false, 0400) \
++	param(int, lkf_display, -1, 0400) \
+ 
+ #define MEMBER(T, member, ...) T member;
+ struct intel_display_params {
+-- 
+2.56.1
+

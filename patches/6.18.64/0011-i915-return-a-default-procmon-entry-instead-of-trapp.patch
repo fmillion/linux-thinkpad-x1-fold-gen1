@@ -1,0 +1,49 @@
+From a6e343215c4836e8fd5955aee228af8b1c50d910 Mon Sep 17 00:00:00 2001
+From: Lakefield kernel fixes <lakefield@example.invalid>
+Date: Tue, 17 Nov 2026 05:08:46 -0300
+Subject: [PATCH 11/19] i915: return a default procmon entry instead of
+ trapping
+
+icl_get_procmon_ref_values() reached its default arm with an unexpected
+PHY strap value on Lakefield - 0xffffffff, because the COMP_DW3 read does
+not land before the PHY is powered. MISSING_CASE() expands to WARN(1, ...)
+with a constant-true condition, so GCC proves the fallthrough after it
+unreachable and emits UD1: the kernel oopses with an invalid opcode
+(RIP icl_get_procmon_ref_values, Code: ... 0f b9) instead of warning, and
+the machine is wedged hard enough to need a power cycle.
+
+Return the 0.85V dot0 entry explicitly, which is what the table falls
+back to anyway.
+---
+ drivers/gpu/drm/i915/display/intel_combo_phy.c | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_combo_phy.c b/drivers/gpu/drm/i915/display/intel_combo_phy.c
+index 112749f97..dcceabe57 100644
+--- a/drivers/gpu/drm/i915/display/intel_combo_phy.c
++++ b/drivers/gpu/drm/i915/display/intel_combo_phy.c
+@@ -62,8 +62,19 @@ icl_get_procmon_ref_values(struct intel_display *display, enum phy phy)
+ 	val = intel_de_read(display, ICL_PORT_COMP_DW3(phy));
+ 	switch (val & (PROCESS_INFO_MASK | VOLTAGE_INFO_MASK)) {
+ 	default:
+-		MISSING_CASE(val);
+-		fallthrough;
++		/*
++		 * Reading PORT_COMP_DW3 before the PHY is powered returns
++		 * 0xffffffff (the read did not land), so this arm is reachable
++		 * with a value no table matches. MISSING_CASE() is WARN(1, ...)
++		 * with a constant-true condition, so GCC proves the following
++		 * fallthrough unreachable and emits UD1 - an unexpected register
++		 * value becomes an invalid-opcode oops instead of a warning.
++		 * Return a sane default explicitly.
++		 */
++		drm_dbg_kms(display->drm,
++			    "unknown PHY strap 0x%08x (phy=%c), using 0.85V dot0\n",
++			    val, phy_name(phy));
++		return &icl_procmon_values[PROCMON_0_85V_DOT_0];
+ 	case VOLTAGE_INFO_0_85V | PROCESS_INFO_DOT_0:
+ 		return &icl_procmon_values[PROCMON_0_85V_DOT_0];
+ 	case VOLTAGE_INFO_0_95V | PROCESS_INFO_DOT_0:
+-- 
+2.56.1
+

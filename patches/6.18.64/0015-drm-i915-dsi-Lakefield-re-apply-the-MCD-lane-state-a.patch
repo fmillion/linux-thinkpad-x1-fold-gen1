@@ -1,0 +1,82 @@
+From f226af098834c86de316d7567518e76bc9aa0679 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 06:30:30 +0000
+Subject: [PATCH 15/19] drm/i915/dsi: Lakefield: re-apply the MCD lane state
+ after combo PHY init
+
+The ICL combo PHY init also runs while the DSI port is live: at driver
+load with the firmware's mode inherited (fastboot) and when exiting DC
+states. It clobbers the MCD lane registers each time, so put the
+captured state back at the end of icl_combo_phys_init() whenever DDI A
+is enabled.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/icl_dsi.c         | 4 ++--
+ drivers/gpu/drm/i915/display/icl_dsi.h         | 1 +
+ drivers/gpu/drm/i915/display/intel_combo_phy.c | 9 +++++++++
+ 3 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/icl_dsi.c b/drivers/gpu/drm/i915/display/icl_dsi.c
+index 2227117d4..3d208c19f 100644
+--- a/drivers/gpu/drm/i915/display/icl_dsi.c
++++ b/drivers/gpu/drm/i915/display/icl_dsi.c
+@@ -164,7 +164,7 @@ void icl_dsi_lkf_mcd_snapshot(struct intel_display *display)
+ 		 "Lakefield: no MCD D-PHY reference state; the DSI panel will likely stay dark\n");
+ }
+ 
+-static void lkf_mcd_restore(struct intel_display *display)
++void icl_dsi_lkf_mcd_restore(struct intel_display *display)
+ {
+ 	int lane, n;
+ 
+@@ -1278,7 +1278,7 @@ gen11_dsi_enable_port_and_phy(struct intel_encoder *encoder,
+ 	gen11_dsi_setup_dphy_timings(encoder, crtc_state);
+ 
+ 	/* Lakefield: configure the MCD D-PHY lanes before enabling the IO buffer */
+-	lkf_mcd_restore(to_intel_display(encoder));
++	icl_dsi_lkf_mcd_restore(to_intel_display(encoder));
+ 
+ 	/* enable DDI buffer */
+ 	gen11_dsi_enable_ddi_buffer(encoder);
+diff --git a/drivers/gpu/drm/i915/display/icl_dsi.h b/drivers/gpu/drm/i915/display/icl_dsi.h
+index 9a1ecd17d..9fa0cc8b0 100644
+--- a/drivers/gpu/drm/i915/display/icl_dsi.h
++++ b/drivers/gpu/drm/i915/display/icl_dsi.h
+@@ -14,5 +14,6 @@ void icl_dsi_init(struct intel_display *display,
+ 		  const struct intel_bios_encoder_data *devdata);
+ void icl_dsi_frame_update(struct intel_crtc_state *crtc_state);
+ void icl_dsi_lkf_mcd_snapshot(struct intel_display *display);
++void icl_dsi_lkf_mcd_restore(struct intel_display *display);
+ 
+ #endif /* __ICL_DSI_H__ */
+diff --git a/drivers/gpu/drm/i915/display/intel_combo_phy.c b/drivers/gpu/drm/i915/display/intel_combo_phy.c
+index dcceabe57..491c88281 100644
+--- a/drivers/gpu/drm/i915/display/intel_combo_phy.c
++++ b/drivers/gpu/drm/i915/display/intel_combo_phy.c
+@@ -6,6 +6,7 @@
+ #include <drm/drm_print.h>
+ 
+ #include "i915_utils.h"
++#include "icl_dsi.h"
+ #include "intel_combo_phy.h"
+ #include "intel_combo_phy_regs.h"
+ #include "intel_de.h"
+@@ -381,6 +382,14 @@ static void icl_combo_phys_init(struct intel_display *display)
+ 		intel_de_rmw(display, ICL_PORT_CL_DW5(phy),
+ 			     0, CL_POWER_DOWN_ENABLE);
+ 	}
++
++	/*
++	 * Lakefield: the ICL combo PHY programming above lands on the MCD
++	 * D-PHY lane registers. If the DSI port is live (firmware handover,
++	 * DC state exit), put the lane state back right away.
++	 */
++	if (intel_de_read(display, DDI_BUF_CTL(PORT_A)) & DDI_BUF_CTL_ENABLE)
++		icl_dsi_lkf_mcd_restore(display);
+ }
+ 
+ static void icl_combo_phys_uninit(struct intel_display *display)
+-- 
+2.56.1
+

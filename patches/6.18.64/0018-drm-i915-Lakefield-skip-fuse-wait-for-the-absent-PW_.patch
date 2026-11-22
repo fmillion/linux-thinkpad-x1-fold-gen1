@@ -1,0 +1,61 @@
+From f4a71077d2ab1fabbac253d49923336d6c23f340 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 07:07:06 +0000
+Subject: [PATCH 18/19] drm/i915: Lakefield: skip fuse wait for the absent
+ PW_2, quiet expected PHY A note
+
+After the PW_2 enable request is not accepted there is no fuse to wait
+for either; avoid the WARN in gen9_wait_for_power_well_fuses() on every
+display power-up. Also log the expected DSI-vs-DDI-D PHY A situation on
+Lakefield at debug level.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_combo_phy.c          | 5 ++++-
+ drivers/gpu/drm/i915/display/intel_display_power_well.c | 7 +++++++
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_combo_phy.c b/drivers/gpu/drm/i915/display/intel_combo_phy.c
+index 491c88281..c9551b893 100644
+--- a/drivers/gpu/drm/i915/display/intel_combo_phy.c
++++ b/drivers/gpu/drm/i915/display/intel_combo_phy.c
+@@ -192,7 +192,10 @@ static bool ehl_vbt_ddi_d_present(struct intel_display *display)
+ 	 * DDI-D _and_ an internal display on DDI-A/DSI leave an error message
+ 	 * in the log and let the internal display win.
+ 	 */
+-	if (ddi_d_present)
++	if (ddi_d_present && to_pci_dev(display->drm->dev)->device == 0x9840)
++		/* Lakefield VBTs list the DSI panel and DDI-D; expected */
++		drm_dbg_kms(display->drm, "PHY A: internal display (DSI) wins over DDI-D\n");
++	else if (ddi_d_present)
+ 		drm_err(display->drm,
+ 			"VBT claims to have both internal and external displays on PHY A.  Configuring for internal.\n");
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_display_power_well.c b/drivers/gpu/drm/i915/display/intel_display_power_well.c
+index 27c4f0f91..eda667374 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_power_well.c
++++ b/drivers/gpu/drm/i915/display/intel_display_power_well.c
+@@ -407,6 +407,12 @@ static void hsw_power_well_enable(struct intel_display *display,
+ 
+ 	hsw_wait_for_power_well_enable(display, power_well, false);
+ 
++	/* Lakefield: no fuse to wait for on a gate that is absent (PW_2) */
++	if (power_well->desc->has_fuses &&
++	    to_pci_dev(display->drm->dev)->device == 0x9840 &&
++	    !(intel_de_read(display, regs->driver) & HSW_PWR_WELL_CTL_REQ(pw_idx)))
++		goto post_enable;
++
+ 	if (power_well->desc->has_fuses) {
+ 		enum skl_power_gate pg;
+ 
+@@ -415,6 +421,7 @@ static void hsw_power_well_enable(struct intel_display *display,
+ 		gen9_wait_for_power_well_fuses(display, pg);
+ 	}
+ 
++post_enable:
+ 	hsw_power_well_post_enable(display,
+ 				   power_well->desc->irq_pipe_mask,
+ 				   power_well->desc->has_vga);
+-- 
+2.56.1
+

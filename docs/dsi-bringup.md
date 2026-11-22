@@ -89,3 +89,12 @@ period), "captured firmware MCD D-PHY state" logged.
 - Runtime PM is active in display mode (GPU reaches DC9 with the screen off) and resumes cleanly.
 - Still noisy: `gen9_wait_for_power_well_fuses` WARN (PW_2) on every suspend/resume;
   `Unclaimed read 0x6f400` (TRANS_DDI_FUNC_CTL of the eDP transcoder, absent on LKF).
+
+## Made default (2026-11-22)
+Patch series now 19 patches (`patches/6.18.64/`), verified to apply to pristine 6.18.64 and to
+reproduce the work tree exactly. Additional cleanups: absent PW_2 skips the fuse wait (no WARN),
+`lkf_desc` without the eDP transcoder (no unclaimed 0x6f400), PHY A note at debug level on LKF.
+`i915.lkf_display` = -1 (auto: on for ThinkPad X1 Fold Gen 1 via DMI). DC states now enabled by
+default (DMC `icl_dmc_ver1_09` loads) — first boots in this configuration are the DC5/DC6 test.
+Removed from the external install: test GRUB entry, `zz-…-i915-debug.conf`, Plasma env script.
+Added: SDDM Wayland greeter config.

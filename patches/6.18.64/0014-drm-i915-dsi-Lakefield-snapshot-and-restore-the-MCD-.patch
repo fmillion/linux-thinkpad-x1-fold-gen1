@@ -1,0 +1,263 @@
+From f69bcd0b1603c35791e5ccda38e60b946379542e Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 06:29:00 +0000
+Subject: [PATCH 14/19] drm/i915/dsi: Lakefield: snapshot and restore the MCD
+ D-PHY lane state
+
+Lakefield's D-PHY is a Modular Configurable D-PHY (MCD) with its own
+programming model; i915 only knows the Ice Lake D-PHY, whose registers
+alias the MCD lane registers inside the combo PHY A window, so the ICL
+programming leaves the lanes without TX timing and the panel dark.
+
+The lane timings depend on the panel and DSI bit rate (the ThinkPad X1
+Fold runs ~1290 Mb/s/lane, the Galaxy Book S ~887 Mb/s/lane, and their
+TX_TIMING values differ). Instead of a hard-coded table, capture the
+state the firmware programmed - before intel_power_domains_init_hw()
+runs the combo PHY init - when the firmware has DDI A enabled, and
+restore it in gen11_dsi_enable_port_and_phy() before the DDI buffer is
+enabled. Keep the values captured on the X1 Fold as a DMI-matched
+fallback for boots where the firmware did not light the panel.
+
+Lane map and aliasing analysis from the Lakefield kernel fixes series.
+
+Link: https://github.com/Independent-Scientist/lakefield-kernel-fixes
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/icl_dsi.c        | 136 ++++++++++++++++++
+ drivers/gpu/drm/i915/display/icl_dsi.h        |   1 +
+ .../gpu/drm/i915/display/intel_display_core.h |   7 +
+ .../drm/i915/display/intel_display_driver.c   |   5 +
+ drivers/gpu/drm/i915/i915_driver.c            |   4 +-
+ 5 files changed, 152 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/i915/display/icl_dsi.c b/drivers/gpu/drm/i915/display/icl_dsi.c
+index 1ac6a1433..2227117d4 100644
+--- a/drivers/gpu/drm/i915/display/icl_dsi.c
++++ b/drivers/gpu/drm/i915/display/icl_dsi.c
+@@ -57,6 +57,139 @@
+ #include "skl_scaler.h"
+ #include "skl_universal_plane.h"
+ 
++#include <linux/dmi.h>
++
++/*
++ * Lakefield's D-PHY is a Modular Configurable D-PHY (MCD), a non-VPG design
++ * with its own programming model (Lakefield PRM Vol 12, "MCD Programming").
++ * i915 only knows the Ice Lake (VPG) D-PHY, whose register layout aliases the
++ * MCD one inside the combo PHY A window: icl_combo_phys_init() and the ICL
++ * DSI swing/lane programming clobber MST_SLV_INIT_CTL and zero
++ * TX_TIMING_CTL0/1, after which nothing leaves the PHY. The values are panel
++ * and bit-rate specific, so take them from the firmware (GOP), which lit the
++ * panel, before i915 touches the PHY, and restore them on every enable.
++ *
++ * Analysis of the MCD aliasing and lane map: Lakefield kernel fixes
++ * (github.com/Independent-Scientist/lakefield-kernel-fixes).
++ */
++#define LKF_MCD_CBBS_CLOCK_CTRL		_MMIO(0x162030)
++#define LKF_MCD_UDLN(lane, off)		_MMIO(0x162280 + (lane) * 0x200 + (off))
++#define   LKF_MCD_SOFT_RST_CTL		0x08
++#define   LKF_MCD_TXRX_CTL		0x10
++#define   LKF_MCD_MST_SLV_INIT_CTL	0x14
++#define   LKF_MCD_TX_TIMING_CTL(n)	(0x18 + 4 * (n))
++#define LKF_MCD_LANES			5	/* lanes 0,1,3,4 = data 0..3, lane 2 = clock */
++
++static bool is_lakefield(struct intel_display *display)
++{
++	return to_pci_dev(display->drm->dev)->device == 0x9840;
++}
++
++/* Captured from the GOP on a ThinkPad X1 Fold Gen 1 (1536x2048, 4 lanes, ~1290 Mb/s). */
++static const struct {
++	u32 cbbs, ctl[5], mst, t[5][4];
++} lkf_mcd_x1_fold = {
++	.cbbs = 0x0c519300,
++	.ctl = { 0x00001c0b, 0x00000c0b, 0x00000c0b, 0x00000c0b, 0x00000c0b },
++	.mst = 1,
++	.t = {
++		{ 0x0c1a0808, 0x0a00001a, 0x017f0001, 0x00030200 },
++		{ 0x0c1a0808, 0x0a00001a, 0x017f0001, 0x00030200 },
++		{ 0x0c350808, 0x0a001a1a, 0x017f0001, 0x00030200 },	/* clock */
++		{ 0x0c1a0808, 0x0a00001a, 0x017f0001, 0x00030200 },
++		{ 0x0c1a0808, 0x0a00001a, 0x017f0001, 0x00030200 },
++	},
++};
++
++static const struct dmi_system_id lkf_mcd_fallback_dmi[] = {
++	{
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
++			DMI_MATCH(DMI_PRODUCT_FAMILY, "ThinkPad X1 Fold Gen 1"),
++		},
++	},
++	{ }
++};
++
++/* Called before the display power/PHY init, i.e. with the GOP state intact. */
++void icl_dsi_lkf_mcd_snapshot(struct intel_display *display)
++{
++	int lane, n;
++	bool lit = true;
++
++	if (!is_lakefield(display))
++		return;
++
++	/* Only trust the PHY state if the firmware has DDI A up and the lanes configured */
++	if (!(intel_de_read(display, DDI_BUF_CTL(PORT_A)) & DDI_BUF_CTL_ENABLE))
++		lit = false;
++	for (lane = 0; lit && lane < LKF_MCD_LANES; lane++)
++		if (intel_de_read(display, LKF_MCD_UDLN(lane, LKF_MCD_MST_SLV_INIT_CTL)) != 1)
++			lit = false;
++
++	if (lit) {
++		display->lkf_mcd.cbbs_clock_ctrl = intel_de_read(display, LKF_MCD_CBBS_CLOCK_CTRL);
++		for (lane = 0; lane < LKF_MCD_LANES; lane++) {
++			display->lkf_mcd.txrx_ctl[lane] =
++				intel_de_read(display, LKF_MCD_UDLN(lane, LKF_MCD_TXRX_CTL));
++			display->lkf_mcd.mst_slv_init[lane] = 1;
++			for (n = 0; n < 4; n++)
++				display->lkf_mcd.tx_timing[lane][n] =
++					intel_de_read(display, LKF_MCD_UDLN(lane, LKF_MCD_TX_TIMING_CTL(n)));
++		}
++		display->lkf_mcd.valid = true;
++		drm_info(display->drm,
++			 "Lakefield: captured firmware MCD D-PHY state (CBBS %08x, data lane T0/T1 %08x/%08x, clock lane %08x/%08x)\n",
++			 display->lkf_mcd.cbbs_clock_ctrl,
++			 display->lkf_mcd.tx_timing[0][0], display->lkf_mcd.tx_timing[0][1],
++			 display->lkf_mcd.tx_timing[2][0], display->lkf_mcd.tx_timing[2][1]);
++		return;
++	}
++
++	if (dmi_check_system(lkf_mcd_fallback_dmi)) {
++		display->lkf_mcd.cbbs_clock_ctrl = lkf_mcd_x1_fold.cbbs;
++		for (lane = 0; lane < LKF_MCD_LANES; lane++) {
++			display->lkf_mcd.txrx_ctl[lane] = lkf_mcd_x1_fold.ctl[lane];
++			display->lkf_mcd.mst_slv_init[lane] = lkf_mcd_x1_fold.mst;
++			for (n = 0; n < 4; n++)
++				display->lkf_mcd.tx_timing[lane][n] = lkf_mcd_x1_fold.t[lane][n];
++		}
++		display->lkf_mcd.valid = true;
++		drm_info(display->drm,
++			 "Lakefield: firmware did not light DSI; using the ThinkPad X1 Fold MCD D-PHY table\n");
++		return;
++	}
++
++	drm_warn(display->drm,
++		 "Lakefield: no MCD D-PHY reference state; the DSI panel will likely stay dark\n");
++}
++
++static void lkf_mcd_restore(struct intel_display *display)
++{
++	int lane, n;
++
++	if (!is_lakefield(display) || !display->lkf_mcd.valid)
++		return;
++
++	intel_de_write(display, LKF_MCD_CBBS_CLOCK_CTRL, display->lkf_mcd.cbbs_clock_ctrl);
++	for (lane = 0; lane < LKF_MCD_LANES; lane++) {
++		/*
++		 * The ICL swing programming leaves the UDLN reset / TXLP latch
++		 * override bits set here (lane 2's SOFT_RST_CTL aliases
++		 * ICL PORT_TX_DW2_GRP(PHY_A)); a clock lane held in reset gives
++		 * no clock and no image. The firmware leaves it 0.
++		 */
++		intel_de_write(display, LKF_MCD_UDLN(lane, LKF_MCD_SOFT_RST_CTL), 0);
++		intel_de_write(display, LKF_MCD_UDLN(lane, LKF_MCD_TXRX_CTL),
++			       display->lkf_mcd.txrx_ctl[lane]);
++		intel_de_write(display, LKF_MCD_UDLN(lane, LKF_MCD_MST_SLV_INIT_CTL),
++			       display->lkf_mcd.mst_slv_init[lane]);
++		for (n = 0; n < 4; n++)
++			intel_de_write(display, LKF_MCD_UDLN(lane, LKF_MCD_TX_TIMING_CTL(n)),
++				       display->lkf_mcd.tx_timing[lane][n]);
++	}
++}
++
+ static int header_credits_available(struct intel_display *display,
+ 				    enum transcoder dsi_trans)
+ {
+@@ -1144,6 +1277,9 @@ gen11_dsi_enable_port_and_phy(struct intel_encoder *encoder,
+ 	/* setup D-PHY timings */
+ 	gen11_dsi_setup_dphy_timings(encoder, crtc_state);
+ 
++	/* Lakefield: configure the MCD D-PHY lanes before enabling the IO buffer */
++	lkf_mcd_restore(to_intel_display(encoder));
++
+ 	/* enable DDI buffer */
+ 	gen11_dsi_enable_ddi_buffer(encoder);
+ 
+diff --git a/drivers/gpu/drm/i915/display/icl_dsi.h b/drivers/gpu/drm/i915/display/icl_dsi.h
+index 099fc50e3..9a1ecd17d 100644
+--- a/drivers/gpu/drm/i915/display/icl_dsi.h
++++ b/drivers/gpu/drm/i915/display/icl_dsi.h
+@@ -13,5 +13,6 @@ struct intel_display;
+ void icl_dsi_init(struct intel_display *display,
+ 		  const struct intel_bios_encoder_data *devdata);
+ void icl_dsi_frame_update(struct intel_crtc_state *crtc_state);
++void icl_dsi_lkf_mcd_snapshot(struct intel_display *display);
+ 
+ #endif /* __ICL_DSI_H__ */
+diff --git a/drivers/gpu/drm/i915/display/intel_display_core.h b/drivers/gpu/drm/i915/display/intel_display_core.h
+index 800a30b8b..c427ba66d 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_core.h
++++ b/drivers/gpu/drm/i915/display/intel_display_core.h
+@@ -597,6 +597,13 @@ struct intel_display {
+ 	struct intel_wm wm;
+ 
+ 	struct work_struct psr_dc5_dc6_wa_work;
++
++	/* Lakefield MCD D-PHY lane state, see icl_dsi_lkf_mcd_snapshot() */
++	struct {
++		bool valid;
++		u32 cbbs_clock_ctrl;
++		u32 txrx_ctl[5], mst_slv_init[5], tx_timing[5][4];
++	} lkf_mcd;
+ };
+ 
+ #endif /* __INTEL_DISPLAY_CORE_H__ */
+diff --git a/drivers/gpu/drm/i915/display/intel_display_driver.c b/drivers/gpu/drm/i915/display/intel_display_driver.c
+index cf1c14412..f2aed18cc 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_driver.c
++++ b/drivers/gpu/drm/i915/display/intel_display_driver.c
+@@ -30,6 +30,7 @@
+ #include "intel_crtc.h"
+ #include "intel_display_core.h"
+ #include "intel_display_debugfs.h"
++#include "icl_dsi.h"
+ #include "intel_display_driver.h"
+ #include "intel_display_irq.h"
+ #include "intel_display_power.h"
+@@ -233,6 +234,10 @@ int intel_display_driver_probe_noirq(struct intel_display *display)
+ 
+ 	intel_pmdemand_init_early(display);
+ 
++	/* Before the combo PHY init clobbers the Lakefield MCD D-PHY lanes */
++	if (HAS_DISPLAY(display))
++		icl_dsi_lkf_mcd_snapshot(display);
++
+ 	intel_power_domains_init_hw(display, false);
+ 
+ 	if (!HAS_DISPLAY(display))
+diff --git a/drivers/gpu/drm/i915/i915_driver.c b/drivers/gpu/drm/i915/i915_driver.c
+index 886e6624c..de915c8f9 100644
+--- a/drivers/gpu/drm/i915/i915_driver.c
++++ b/drivers/gpu/drm/i915/i915_driver.c
+@@ -313,7 +313,7 @@ static void i915_driver_late_release(struct drm_i915_private *dev_priv)
+ /* Lakefield with the display left to simpledrm (see i915.lkf_display). */
+ bool i915_lkf_render_only(struct drm_i915_private *i915)
+ {
+-	return IS_LAKEFIELD_PCI(i915) && !HAS_DISPLAY(i915->display);
++	return IS_LAKEFIELD_PCI(i915) && !intel_display_device_present(i915->display);
+ }
+ 
+ /*
+@@ -333,6 +333,8 @@ static void lkf_dump_firmware_display_state(struct drm_i915_private *i915)
+ 		{ 0x070000, 0x070020, "pipe A" },
+ 		{ 0x070180, 0x0701c0, "plane 1A" },
+ 		{ 0x06b000, 0x06b700, "DSI transcoder 0" },
++		{ 0x0c4000, 0x0c4040, "south hotplug (SHOTPLUG_CTL_DDI @c4030)" },
++		{ 0x0c7200, 0x0c7220, "PCH panel power sequencer (PP_*)" },
+ 		{ 0x0c8250, 0x0c8260, "SoC PWM backlight 1" },
+ 		{ 0x0c8350, 0x0c8360, "SoC PWM backlight 2" },
+ 		{ 0x160000, 0x160100, "MIPIO escape clocks" },
+-- 
+2.56.1
+

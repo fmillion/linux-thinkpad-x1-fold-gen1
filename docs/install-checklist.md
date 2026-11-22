@@ -28,5 +28,8 @@ i915 GuC/HuC/DMC, later audio/BT)**, a network service and `sshd` enabled.
 - `udev/60-thinkpad-x1-fold.rules` → `/etc/udev/rules.d/`
 - `modprobe.d/thinkpad-x1-fold-i915.conf` → `/etc/modprobe.d/`
 - `systemd/thinkpad-x1-fold-gpu-id.service` → `/etc/systemd/system/`, `systemctl enable`
-- `plasma/thinkpad-x1-fold-gpu.sh` → `~/.config/plasma-workspace/env/` (owned by the user;
-  note the user's group is `users`, not the uid)
+- `sddm/10-thinkpad-x1-fold-wayland.conf` → `/etc/sddm.conf.d/`
+- (render-only mode only) `plasma/thinkpad-x1-fold-gpu.sh` → `~/.config/plasma-workspace/env/`
+  (owned by the user; the user's group is `users`, not the uid)
+- The kernel image must include patch 0012 (panel orientation quirk, built-in) — i.e. build the
+  full kernel from the series, not only modules.
