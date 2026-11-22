@@ -1,7 +1,7 @@
 From ca9d7175f54646c1118efbde112533001bcdce64 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 06:53:09 +0000
-Subject: [PATCH 17/29] drm/i915/pps: Lakefield: use the PCH panel power
+Subject: [PATCH 17/30] drm/i915/pps: Lakefield: use the PCH panel power
  sequencer base
 
 Lakefield is driven with the Elkhart Lake display info but has no PCH,

@@ -1,7 +1,7 @@
 From 6295ba26512bad0e28b3a8e9f6316643f4b61049 Mon Sep 17 00:00:00 2001
 From: Cai Yu <caiyu7372@gmail.com>
 Date: Sat, 26 Sep 2026 07:40:40 +0800
-Subject: [PATCH 24/29] Bluetooth: hci_intel: fix tty-only assumptions in the
+Subject: [PATCH 24/30] Bluetooth: hci_intel: fix tty-only assumptions in the
  LPM paths
 
 The LPM support of this driver looks up the platform device that provides

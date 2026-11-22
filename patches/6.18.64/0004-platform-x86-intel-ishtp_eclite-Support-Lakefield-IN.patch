@@ -1,7 +1,7 @@
 From dec7bb6303f98cac1bdba69b4e778378877571dd Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 01:15:21 +0000
-Subject: [PATCH 04/29] platform/x86: intel: ishtp_eclite: Support Lakefield
+Subject: [PATCH 04/30] platform/x86: intel: ishtp_eclite: Support Lakefield
  (INT3538) ECLite
 
 Lakefield firmware (e.g. Lenovo ThinkPad X1 Fold Gen 1) describes the

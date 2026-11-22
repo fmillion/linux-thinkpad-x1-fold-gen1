@@ -1,7 +1,7 @@
 From 1a39021e1a90825855c6b5e5f615129d96a8d70a Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 07:19:55 +0000
-Subject: [PATCH 21/29] drm/i915: Lakefield: do not use DC5/DC6
+Subject: [PATCH 21/30] drm/i915: Lakefield: do not use DC5/DC6
 
 With DC5/DC6 enabled on the ThinkPad X1 Fold Gen 1 the DMC program is
 lost across s2idle and the display does not come back: after resume all

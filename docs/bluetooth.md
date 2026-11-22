@@ -33,3 +33,22 @@
   Repeated rmmod/modprobe can leave the controller in an unknown state → test from a fresh boot.
 - Also traced: i915 `Unclaimed write 0x64834` comes from `gen11_display_irq_reset()` during
   runtime suspend (an IRQ register of a display block LKF lacks) — harmless, loose end.
+
+## Root cause found: LE Coded scanning (patch 0030)
+Clean-boot A/B: 20 s LE scans see 1–2 devices with **zero RSSI updates** whether Wi-Fi is on or
+off. BlueZ uses extended scanning on **LE 1M + LE Coded** simultaneously; with this CcP firmware
+that starves the 1M scan. `btmgmt phy …` without `LECODEDRX/TX` → same scan: **10 devices, 30
+advertising reports**, and the keyboard is found immediately. Patch 0030 sets
+`HCI_QUIRK_BROKEN_LE_CODED` for hardware variant 0x14 (BlueZ then never uses Coded).
+The earlier "Wi-Fi coexistence" result was coincidental (the post-wedge state confused tests).
+
+## Pairing the Fold Mini Keyboard
+- It rotates its static random address per pairing session (seen: `E4:12:04:53:B0:AA`,
+  `DD:CA:48:94:C7:3C`); after bonding, BlueZ follows it by its IRK.
+- **Passkey entry required** (keyboard types the code). Plasma's list does not show it (no Name AD
+  until connected; it reports "Lenovo Fold Mini Keyboard" after connecting) and a pair request
+  routed to Plasma's agent ended in `AuthenticationCanceled`. Working method: `bluetoothctl` with
+  `agent KeyboardDisplay`, `pair <addr>`, show the passkey to the user (here via `notify-send`),
+  type it on the keyboard + Enter; then `trust`, `connect`. Keyboard and touchpad work.
+- Dual boot: Windows and Linux share the adapter address but hold different bond keys → pairing
+  in one OS breaks the other unless the LTK/IRK are copied across (TODO if dual-boot is kept).

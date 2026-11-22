@@ -1,0 +1,40 @@
+From 34058cd40f9fe8c4ff2722378ba695acfce85134 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 09:04:04 +0000
+Subject: [PATCH 30/30] Bluetooth: hci_intel: CcP: mark LE Coded as broken
+
+Scanning on LE Coded and LE 1M simultaneously starves the 1M scan with
+the CcP (hardware variant 0x14) firmware on the ThinkPad X1 Fold Gen 1:
+a 20 s LE scan finds 1-2 devices and no RSSI updates, and the Fold Mini
+Keyboard (BLE HID) is never seen. With the Coded PHY deselected the
+same scan finds ~10 devices / 30 advertising reports and the keyboard
+pairs. Set HCI_QUIRK_BROKEN_LE_CODED for this variant.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/bluetooth/hci_intel.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/bluetooth/hci_intel.c b/drivers/bluetooth/hci_intel.c
+index a71baeb21..2e76f102b 100644
+--- a/drivers/bluetooth/hci_intel.c
++++ b/drivers/bluetooth/hci_intel.c
+@@ -715,6 +715,15 @@ static int intel_setup(struct hci_uart *hu)
+ 		hci_set_quirk(hdev, HCI_QUIRK_INVALID_BDADDR);
+ 	}
+ 
++	/*
++	 * CcP: scanning on LE Coded and LE 1M at the same time starves the 1M
++	 * scan with this firmware (ThinkPad X1 Fold Gen 1: 1-2 devices and no
++	 * RSSI updates in 20 s, 10 devices / 30 reports with Coded deselected).
++	 * Almost everything, including HID keyboards, advertises on 1M.
++	 */
++	if (ver.hw_variant == 0x14)
++		hci_set_quirk(hdev, HCI_QUIRK_BROKEN_LE_CODED);
++
+ 	/* With this Intel bootloader only the hardware variant and device
+ 	 * revision information are used to select the right firmware for SfP
+ 	 * and WsP.
+-- 
+2.56.1
+
