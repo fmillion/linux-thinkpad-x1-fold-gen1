@@ -331,3 +331,20 @@ Patch series now (`patches/6.18.64/`): 0001–0002 upstream backports, 0003 ISH 
   no LKF `intel_pmc_core`).
 - Added `userspace/udev/60-thinkpad-x1-fold.rules` (ISH `power/wakeup=enabled`) and lid resync
   (`\_SB.LID0.UNLS`) in `lenovo-fold-dock` `.complete()` after resume.
+
+## 12. GPU: i915 render/media-only bring-up (patch 0006) — works
+Approach (after franke7777's Galaxy Book S work): bind `8086:9840` with `ehl_info` (GT only; no
+display descriptor → display init skipped), keep simpledrm scanning out the BOOTFB.
+- BOOTFB: aperture `0xa0000000`, offset 0, **12 MiB** (1536×2048×4) → reserve 16 MiB of GGTT
+  (the Galaxy Book S patch's 8 MiB would be too small here). No stolen memory, no runtime PM.
+- Probe (6.18.64-fold): platform ELKHARTLAKE, gfx/media ver 11, engines `bcs0 rcs0 vcs0 vecs0`,
+  freq RPn 300 / RP0 500 MHz, GuC/HuC off. `card1` + `renderD128`; simpledrm stays `card0`.
+- Mesa 26.3.1 rejects `0x9840` ("Driver does not support the 0x9840 PCI ID"). Interim: bind-mount
+  `0x4e71` over `/sys/bus/pci/devices/0000:00:02.0/device` → "Mesa Intel(R) UHD Graphics (JSL)",
+  GLES 3.2. `tools/gpu-exec-probe.c`: FBO draw + readback **PASS**, ~4465 fps 1024² clear+draw.
+- VA-API: intel-media-driver 26.3.5 with `i915.lkf_chipset_id=0x4e71`: decode MPEG2/H.264/VC1/
+  JPEG/VP8/HEVC (8/10, 422, 444)/VP9 (0–3). 10 s 1080p30, user CPU sw→hw:
+  H.264 1.79→0.22 s, HEVC 3.00→0.23 s, VP9 2.62→0.22 s; **bit-exact** vs software (60-frame
+  framemd5). No GPU hangs/resets.
+- Interim install: i915 in `updates/` + `/etc/modprobe.d/fold-i915-manual.conf` (blacklist; loaded
+  manually) while testing.

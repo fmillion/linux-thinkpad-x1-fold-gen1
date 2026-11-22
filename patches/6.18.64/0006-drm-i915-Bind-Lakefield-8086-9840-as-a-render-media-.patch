@@ -1,0 +1,255 @@
+From 55d89a99bf521a512990ab83e333b2189da88bcb Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 05:36:32 +0000
+Subject: [PATCH 6/6] drm/i915: Bind Lakefield (8086:9840) as a
+ render/media-only Gen11 GT
+
+i915 has no Lakefield platform. Its Gen11 GT behaves like Elkhart Lake's
+(bcs0/rcs0/vcs0/vecs0, 36-bit PPGTT, sane fused frequency table), so bind
+8086:9840 with ehl_info. With no display descriptor for the ID, display
+initialisation is skipped and the firmware framebuffer keeps being
+scanned out by simpledrm.
+
+To coexist with simpledrm on the same PCI function, unless the new
+i915.lkf_display parameter is set:
+ - do not remove the conflicting firmware framebuffer,
+ - reserve the GGTT range holding the BOOTFB (16 MiB at offset 0;
+   1536x2048x4 = 12 MiB on the ThinkPad X1 Fold),
+ - do not use stolen memory (it holds the BOOTFB),
+ - keep runtime PM forbidden (D3 would freeze the scanout; the GT still
+   enters RC6).
+
+Also add i915.lkf_chipset_id to report a different ID through
+I915_PARAM_CHIPSET_ID (e.g. 0x4e71) for userspace (intel-media-driver)
+that does not know 0x9840 yet.
+
+Based on the Galaxy Book S render-only work by franke7777
+(github.com/franke7777/galaxy-book-s-linux).
+
+Tested on a ThinkPad X1 Fold Gen 1: GLES via iris (with a 0x4e71 PCI ID
+for Mesa) renders correctly; VA-API (iHD) H.264/HEVC/VP9 decode is
+bit-exact with software decode; no GPU hangs.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/gem/i915_gem_stolen.c |  8 ++++++++
+ drivers/gpu/drm/i915/gt/intel_ggtt.c       | 19 +++++++++++++++++++
+ drivers/gpu/drm/i915/gt/intel_gtt.h        |  2 ++
+ drivers/gpu/drm/i915/i915_driver.c         |  4 +++-
+ drivers/gpu/drm/i915/i915_drv.h            |  8 ++++++++
+ drivers/gpu/drm/i915/i915_getparam.c       |  2 ++
+ drivers/gpu/drm/i915/i915_params.c         |  8 ++++++++
+ drivers/gpu/drm/i915/i915_params.h         |  4 +++-
+ drivers/gpu/drm/i915/i915_pci.c            |  1 +
+ drivers/gpu/drm/i915/intel_runtime_pm.c    |  6 +++++-
+ include/drm/intel/pciids.h                 |  4 ++++
+ 11 files changed, 63 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/gem/i915_gem_stolen.c b/drivers/gpu/drm/i915/gem/i915_gem_stolen.c
+index 3380151ed..a2bf2b7b1 100644
+--- a/drivers/gpu/drm/i915/gem/i915_gem_stolen.c
++++ b/drivers/gpu/drm/i915/gem/i915_gem_stolen.c
+@@ -520,6 +520,14 @@ static int i915_gem_init_stolen(struct intel_memory_region *mem)
+ 		return -ENOSPC;
+ 	}
+ 
++	/* Lakefield render-only: stolen memory holds the simpledrm BOOTFB. */
++	if (LKF_RENDER_ONLY(i915)) {
++		drm_notice(&i915->drm,
++			   "%s, disabling use of stolen memory\n",
++			   "Lakefield render-only");
++		return -ENOSPC;
++	}
++
+ 	if (i915_vtd_active(i915) && GRAPHICS_VER(i915) < 8) {
+ 		drm_notice(&i915->drm,
+ 			   "%s, disabling use of stolen memory\n",
+diff --git a/drivers/gpu/drm/i915/gt/intel_ggtt.c b/drivers/gpu/drm/i915/gt/intel_ggtt.c
+index 46a5aa4ab..c6c4fdb51 100644
+--- a/drivers/gpu/drm/i915/gt/intel_ggtt.c
++++ b/drivers/gpu/drm/i915/gt/intel_ggtt.c
+@@ -854,6 +854,8 @@ static void cleanup_init_ggtt(struct i915_ggtt *ggtt)
+ 	ggtt_release_guc_top(ggtt);
+ 	if (drm_mm_node_allocated(&ggtt->error_capture))
+ 		drm_mm_remove_node(&ggtt->error_capture);
++	if (drm_mm_node_allocated(&ggtt->lkf_bootfb))
++		drm_mm_remove_node(&ggtt->lkf_bootfb);
+ 	mutex_destroy(&ggtt->error_mutex);
+ }
+ 
+@@ -887,6 +889,21 @@ static int init_ggtt(struct i915_ggtt *ggtt)
+ 		return ret;
+ 
+ 	mutex_init(&ggtt->error_mutex);
++
++	/*
++	 * Lakefield render-only: the firmware framebuffer that simpledrm keeps
++	 * scanning out is mapped at GGTT offset 0 (1536x2048x4 = 12 MiB on the
++	 * ThinkPad X1 Fold). Keep the firmware PTEs for it.
++	 */
++	if (LKF_RENDER_ONLY(ggtt->vm.i915)) {
++		ggtt->lkf_bootfb.start = 0;
++		ggtt->lkf_bootfb.size = min_t(u64, SZ_16M, ggtt->vm.total);
++		ggtt->lkf_bootfb.color = I915_COLOR_UNEVICTABLE;
++		if (drm_mm_reserve_node(&ggtt->vm.mm, &ggtt->lkf_bootfb))
++			drm_warn(&ggtt->vm.i915->drm,
++				 "Lakefield: failed to reserve the BOOTFB GGTT range\n");
++	}
++
+ 	if (ggtt->mappable_end) {
+ 		/*
+ 		 * Reserve a mappable slot for our lockless error capture.
+@@ -1099,6 +1116,8 @@ static void ggtt_cleanup_hw(struct i915_ggtt *ggtt)
+ 
+ 	if (drm_mm_node_allocated(&ggtt->error_capture))
+ 		drm_mm_remove_node(&ggtt->error_capture);
++	if (drm_mm_node_allocated(&ggtt->lkf_bootfb))
++		drm_mm_remove_node(&ggtt->lkf_bootfb);
+ 	mutex_destroy(&ggtt->error_mutex);
+ 
+ 	ggtt_release_guc_top(ggtt);
+diff --git a/drivers/gpu/drm/i915/gt/intel_gtt.h b/drivers/gpu/drm/i915/gt/intel_gtt.h
+index 9d3a3ad56..51ad5ed7f 100644
+--- a/drivers/gpu/drm/i915/gt/intel_gtt.h
++++ b/drivers/gpu/drm/i915/gt/intel_gtt.h
+@@ -403,6 +403,8 @@ struct i915_ggtt {
+ 
+ 	struct mutex error_mutex;
+ 	struct drm_mm_node error_capture;
++	/* Lakefield render-only: firmware framebuffer kept for simpledrm */
++	struct drm_mm_node lkf_bootfb;
+ 	struct drm_mm_node uc_fw;
+ 
+ 	/** List of GTs mapping this GGTT */
+diff --git a/drivers/gpu/drm/i915/i915_driver.c b/drivers/gpu/drm/i915/i915_driver.c
+index 89be8da79..fd282518c 100644
+--- a/drivers/gpu/drm/i915/i915_driver.c
++++ b/drivers/gpu/drm/i915/i915_driver.c
+@@ -504,7 +504,9 @@ static int i915_driver_hw_probe(struct drm_i915_private *dev_priv)
+ 	if (ret)
+ 		goto err_perf;
+ 
+-	ret = aperture_remove_conflicting_pci_devices(pdev, dev_priv->drm.driver->name);
++	/* Lakefield render-only: simpledrm keeps scanning out the BOOTFB. */
++	if (!LKF_RENDER_ONLY(dev_priv))
++		ret = aperture_remove_conflicting_pci_devices(pdev, dev_priv->drm.driver->name);
+ 	if (ret)
+ 		goto err_ggtt;
+ 
+diff --git a/drivers/gpu/drm/i915/i915_drv.h b/drivers/gpu/drm/i915/i915_drv.h
+index 6a768aad8..58014639c 100644
+--- a/drivers/gpu/drm/i915/i915_drv.h
++++ b/drivers/gpu/drm/i915/i915_drv.h
+@@ -450,6 +450,14 @@ IS_SUBPLATFORM(const struct drm_i915_private *i915,
+ #define IS_MOBILE(i915)	(INTEL_INFO(i915)->is_mobile)
+ #define IS_DGFX(i915)   (INTEL_INFO(i915)->is_dgfx)
+ 
++/*
++ * Lakefield has no i915 platform of its own; its Gen11 GT is driven with the
++ * Elkhart Lake device info. Unless i915.lkf_display is set, i915 runs render
++ * and media only and leaves the firmware framebuffer (simpledrm) alone.
++ */
++#define IS_LAKEFIELD_PCI(i915)	(to_pci_dev((i915)->drm.dev)->device == 0x9840)
++#define LKF_RENDER_ONLY(i915)	(IS_LAKEFIELD_PCI(i915) && !(i915)->params.lkf_display)
++
+ #define IS_I830(i915)	IS_PLATFORM(i915, INTEL_I830)
+ #define IS_I845G(i915)	IS_PLATFORM(i915, INTEL_I845G)
+ #define IS_I85X(i915)	IS_PLATFORM(i915, INTEL_I85X)
+diff --git a/drivers/gpu/drm/i915/i915_getparam.c b/drivers/gpu/drm/i915/i915_getparam.c
+index 6fcda6d7b..225b9a59e 100644
+--- a/drivers/gpu/drm/i915/i915_getparam.c
++++ b/drivers/gpu/drm/i915/i915_getparam.c
+@@ -31,6 +31,8 @@ int i915_getparam_ioctl(struct drm_device *dev, void *data,
+ 		return -ENODEV;
+ 	case I915_PARAM_CHIPSET_ID:
+ 		value = pdev->device;
++		if (IS_LAKEFIELD_PCI(i915) && i915->params.lkf_chipset_id)
++			value = i915->params.lkf_chipset_id;
+ 		break;
+ 	case I915_PARAM_REVISION:
+ 		value = pdev->revision;
+diff --git a/drivers/gpu/drm/i915/i915_params.c b/drivers/gpu/drm/i915/i915_params.c
+index 37746dd61..3965cdc45 100644
+--- a/drivers/gpu/drm/i915/i915_params.c
++++ b/drivers/gpu/drm/i915/i915_params.c
+@@ -92,6 +92,14 @@ i915_param_named(mmio_debug, int, 0400,
+ 	"Enable the MMIO debug code for the first N failures (default: off). "
+ 	"This may negatively affect performance.");
+ 
++i915_param_named_unsafe(lkf_display, bool, 0400,
++	"Lakefield: drive the display with i915 (experimental). "
++	"Default: render/media only, the firmware framebuffer stays on simpledrm.");
++
++i915_param_named_unsafe(lkf_chipset_id, uint, 0400,
++	"Lakefield: PCI device ID reported by I915_PARAM_CHIPSET_ID "
++	"(0 = real ID [default]; e.g. 0x4e71 for userspace that does not know 0x9840 yet)");
++
+ i915_param_named_unsafe(enable_guc, int, 0400,
+ 	"Enable GuC load for GuC submission and/or HuC load. "
+ 	"Required functionality can be selected using bitmask values. "
+diff --git a/drivers/gpu/drm/i915/i915_params.h b/drivers/gpu/drm/i915/i915_params.h
+index 0fbcb5b6d..4aab15110 100644
+--- a/drivers/gpu/drm/i915/i915_params.h
++++ b/drivers/gpu/drm/i915/i915_params.h
+@@ -60,11 +60,13 @@ struct drm_printer;
+ 	param(unsigned int, request_timeout_ms, CONFIG_DRM_I915_REQUEST_TIMEOUT, CONFIG_DRM_I915_REQUEST_TIMEOUT ? 0600 : 0) \
+ 	param(unsigned int, lmem_size, 0, 0400) \
+ 	param(unsigned int, lmem_bar_size, 0, 0400) \
++	param(unsigned int, lkf_chipset_id, 0, 0400) \
+ 	/* leave bools at the end to not create holes */ \
+ 	param(bool, enable_hangcheck, true, 0600) \
+ 	param(bool, error_capture, true, IS_ENABLED(CONFIG_DRM_I915_CAPTURE_ERROR) ? 0600 : 0) \
+ 	param(bool, enable_gvt, false, IS_ENABLED(CONFIG_DRM_I915_GVT) ? 0400 : 0) \
+-	param(bool, enable_debug_only_api, false, IS_ENABLED(CONFIG_DRM_I915_REPLAY_GPU_HANGS_API) ? 0400 : 0)
++	param(bool, enable_debug_only_api, false, IS_ENABLED(CONFIG_DRM_I915_REPLAY_GPU_HANGS_API) ? 0400 : 0) \
++	param(bool, lkf_display, false, 0400)
+ 
+ #define MEMBER(T, member, ...) T member;
+ struct i915_params {
+diff --git a/drivers/gpu/drm/i915/i915_pci.c b/drivers/gpu/drm/i915/i915_pci.c
+index af8d0d625..4f229bc79 100644
+--- a/drivers/gpu/drm/i915/i915_pci.c
++++ b/drivers/gpu/drm/i915/i915_pci.c
+@@ -854,6 +854,7 @@ static const struct pci_device_id pciidlist[] = {
+ 	INTEL_CML_U_GT2_IDS(INTEL_VGA_DEVICE, &cml_gt2_info),
+ 	INTEL_ICL_IDS(INTEL_VGA_DEVICE, &icl_info),
+ 	INTEL_EHL_IDS(INTEL_VGA_DEVICE, &ehl_info),
++	INTEL_LKF_IDS(INTEL_VGA_DEVICE, &ehl_info),
+ 	INTEL_JSL_IDS(INTEL_VGA_DEVICE, &jsl_info),
+ 	INTEL_TGL_IDS(INTEL_VGA_DEVICE, &tgl_info),
+ 	INTEL_RKL_IDS(INTEL_VGA_DEVICE, &rkl_info),
+diff --git a/drivers/gpu/drm/i915/intel_runtime_pm.c b/drivers/gpu/drm/i915/intel_runtime_pm.c
+index 7ce3e6de0..710b4bd8b 100644
+--- a/drivers/gpu/drm/i915/intel_runtime_pm.c
++++ b/drivers/gpu/drm/i915/intel_runtime_pm.c
+@@ -409,7 +409,11 @@ void intel_runtime_pm_enable(struct intel_runtime_pm *rpm)
+ 	 *  Let's keep i915 autosuspend control 'on' till we fix all known issue
+ 	 *  with lmem access in D3.
+ 	 */
+-	if (!IS_DGFX(i915))
++	/*
++	 * Lakefield render-only: simpledrm scans out from this PCI function,
++	 * putting it in D3 freezes the picture. The GT still enters RC6.
++	 */
++	if (!IS_DGFX(i915) && !LKF_RENDER_ONLY(i915))
+ 		pm_runtime_allow(kdev);
+ 
+ 	/*
+diff --git a/include/drm/intel/pciids.h b/include/drm/intel/pciids.h
+index 69d4ae92d..a50fc76ed 100644
+--- a/include/drm/intel/pciids.h
++++ b/include/drm/intel/pciids.h
+@@ -609,6 +609,10 @@
+ 	MACRO__(0x4570, ## __VA_ARGS__), \
+ 	MACRO__(0x4571, ## __VA_ARGS__)
+ 
++/* LKF */
++#define INTEL_LKF_IDS(MACRO__, ...) \
++	MACRO__(0x9840, ## __VA_ARGS__)
++
+ /* JSL */
+ #define INTEL_JSL_IDS(MACRO__, ...) \
+ 	MACRO__(0x4E51, ## __VA_ARGS__), \
+-- 
+2.56.1
+
