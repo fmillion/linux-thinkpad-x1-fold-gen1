@@ -40,3 +40,7 @@ i915 GuC/HuC/DMC, later audio/BT)**, a network service and `sshd` enabled.
   (owned by the user; the user's group is `users`, not the uid)
 - The kernel image must include patch 0012 (panel orientation quirk, built-in) — i.e. build the
   full kernel from the series, not only modules.
+
+## Per-user (Plasma)
+- `userspace/helper/thinkpad-fold-helper` → `~/.local/bin/` (mode 755)
+- `userspace/helper/thinkpad-fold-helper.desktop` → `~/.config/autostart/`

@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""
+thinkpad-fold-helper: keyboard-dock and rotation policy for the Lenovo ThinkPad X1 Fold Gen 1
+on KDE Plasma (Wayland). Runs inside the user's Plasma session (autostart).
+
+  keyboard docked on the screen  -> 1536x1006 docked mode, docked scale, fixed orientation,
+                                    touch mapped to the visible area, accelerometer ignored
+  keyboard not docked            -> full 1536x2048 panel, previous scale, rotation follows the
+                                    accelerometer, normal touch mapping
+
+Needs: patches/6.18.64 (lenovo-fold-dock driver, i915 docked mode), kscreen-doctor, busctl.
+Standard library only.
+"""
+import json
+import os
+import select
+import subprocess
+import sys
+import time
+
+DOCK_ATTR = "/sys/bus/platform/devices/LEN009E:00/keyboard_docked"
+ACCEL_NAME = "accel_3d"
+TOUCH_NAME_SUBSTR = "Touch Host Controller Finger"
+FULL_SIZE = (1536, 2048)
+DOCKED_SIZE = (1536, 1006)
+
+DOCKED_SCALE = float(os.environ.get("FOLD_DOCKED_SCALE", "1.5"))
+# Docked touch: the visible strip covers this fraction of the digitizer's height
+# (calibrated on the reference unit: 1/1.98).
+DOCKED_TOUCH_YSCALE = float(os.environ.get("FOLD_DOCKED_TOUCH_YSCALE", "1.98"))
+
+# The panel is mounted upside down: "upright" needs rotation "inverted". The touch baseline
+# cancels KWin's output-transform rotation of touch (the digitizer itself is upright).
+TOUCH_MATRIX_FULL = "-1,0,1,0,0,-1,1,0,0,0,1,0,0,0,0,1"
+TOUCH_MATRIX_DOCKED = "-1,0,1,0,0,-%g,1,0,0,0,1,0,0,0,0,1" % DOCKED_TOUCH_YSCALE
+DOCKED_ROTATION = "inverted"
+
+# Accelerometer (m/s^2, as read from sysfs) -> kscreen rotation, measured on the reference unit
+ORIENT_THRESHOLD = 6.5
+POLL_ACCEL_S = 0.5
+
+
+def log(*a):
+    print("thinkpad-fold-helper:", *a, file=sys.stderr, flush=True)
+
+
+def run(cmd, check=False):
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if check and r.returncode:
+        log("command failed:", " ".join(cmd), r.stderr.strip())
+    return r
+
+
+# --- display (kscreen) ----------------------------------------------------------------------
+def panel_output():
+    r = run(["kscreen-doctor", "-j"])
+    if r.returncode:
+        return None
+    for o in json.loads(r.stdout).get("outputs", []):
+        if o.get("connected") and o.get("name", "").startswith("DSI"):
+            return o
+    return None
+
+
+def mode_id(output, size):
+    for m in output.get("modes", []):
+        if (m["size"]["width"], m["size"]["height"]) == size and abs(m["refreshRate"] - 60) < 1:
+            return m["id"]
+    return None
+
+
+def apply_output(name, settings):
+    run(["kscreen-doctor"] + ["output.%s.%s" % (name, s) for s in settings], check=True)
+
+
+# --- touch (KWin input device over D-Bus) --------------------------------------------------
+def kwin_touch_path():
+    r = run(["busctl", "--user", "--list", "tree", "org.kde.KWin"])
+    for path in r.stdout.split():
+        if not path.startswith("/org/kde/KWin/InputDevice/event"):
+            continue
+        n = run(["busctl", "--user", "get-property", "org.kde.KWin", path,
+                 "org.kde.KWin.InputDevice", "name"]).stdout
+        if TOUCH_NAME_SUBSTR in n:
+            return path
+    return None
+
+
+def set_touch_matrix(matrix):
+    path = kwin_touch_path()
+    if not path:
+        log("touch device not found in KWin")
+        return
+    run(["busctl", "--user", "set-property", "org.kde.KWin", path, "org.kde.KWin.InputDevice",
+         "calibrationMatrix", "s", "--", matrix], check=True)
+
+
+# --- sensors ---------------------------------------------------------------------------------
+def find_accel():
+    base = "/sys/bus/iio/devices"
+    for d in sorted(os.listdir(base)):
+        try:
+            with open(os.path.join(base, d, "name")) as f:
+                if f.read().strip() == ACCEL_NAME:
+                    return os.path.join(base, d)
+        except OSError:
+            pass
+    return None
+
+
+def read_accel(dev):
+    def rd(n):
+        with open(os.path.join(dev, n)) as f:
+            return float(f.read())
+    s = rd("in_accel_scale")
+    return rd("in_accel_x_raw") * s, rd("in_accel_y_raw") * s, rd("in_accel_z_raw") * s
+
+
+def orientation(x, y, _z):
+    """Return the kscreen rotation keeping the picture upright, or None (flat/ambiguous)."""
+    if abs(y) >= abs(x):
+        if abs(y) < ORIENT_THRESHOLD:
+            return None
+        return "inverted" if y < 0 else "none"
+    if abs(x) < ORIENT_THRESHOLD:
+        return None
+    return "right" if x > 0 else "left"
+
+
+# --- dock --------------------------------------------------------------------------------------
+def read_docked(f):
+    f.seek(0)
+    return f.read().strip() == "1"
+
+
+class Helper:
+    def __init__(self):
+        self.docked = None
+        self.saved_scale = None
+        self.rotation = None
+        self.candidate = None
+        self.accel = find_accel()
+
+    def enter(self, docked):
+        out = panel_output()
+        if not out:
+            log("no DSI output from kscreen")
+            return False
+        name = out["name"]
+        if docked:
+            mid = mode_id(out, DOCKED_SIZE)
+            if mid is None:
+                log("docked mode not offered by the kernel (patch 0023 missing?)")
+                return False
+            if self.docked is not True and out.get("scale"):
+                self.saved_scale = out["scale"]
+            apply_output(name, ["mode.%s" % mid, "scale.%g" % DOCKED_SCALE,
+                                "rotation.%s" % DOCKED_ROTATION])
+            set_touch_matrix(TOUCH_MATRIX_DOCKED)
+            self.rotation = DOCKED_ROTATION
+        else:
+            mid = mode_id(out, FULL_SIZE)
+            settings = ["mode.%s" % mid] if mid else []
+            if self.saved_scale:
+                settings.append("scale.%g" % self.saved_scale)
+            rot = self.current_orientation() or DOCKED_ROTATION
+            settings.append("rotation.%s" % rot)
+            apply_output(name, settings)
+            set_touch_matrix(TOUCH_MATRIX_FULL)
+            self.rotation = rot
+        log("docked" if docked else "undocked", "->", name)
+        self.docked = docked
+        return True
+
+    def current_orientation(self):
+        if not self.accel:
+            return None
+        try:
+            return orientation(*read_accel(self.accel))
+        except OSError:
+            return None
+
+    def rotate_tick(self):
+        o = self.current_orientation()
+        if o is None or o == self.rotation:
+            self.candidate = None
+            return
+        if self.candidate != o:      # need two consecutive agreeing samples
+            self.candidate = o
+            return
+        out = panel_output()
+        if out:
+            apply_output(out["name"], ["rotation.%s" % o])
+            self.rotation = o
+            log("rotation ->", o)
+        self.candidate = None
+
+
+def main():
+    h = Helper()
+    if not h.accel:
+        log("no accelerometer found; rotation disabled")
+    while not os.path.exists(DOCK_ATTR):
+        log("waiting for", DOCK_ATTR)
+        time.sleep(5)
+    f = open(DOCK_ATTR)
+    poller = select.poll()
+    poller.register(f, select.POLLPRI | select.POLLERR)
+
+    # KWin/kscreen may not be ready right at login
+    for _ in range(30):
+        if panel_output():
+            break
+        time.sleep(1)
+
+    docked = read_docked(f)
+    last_dock_read = time.monotonic()
+    while True:
+        if docked != h.docked and not h.enter(docked):
+            time.sleep(2)
+        timeout_ms = int(POLL_ACCEL_S * 1000) if not h.docked and h.accel else 5000
+        events = poller.poll(timeout_ms)
+        if not h.docked:
+            h.rotate_tick()
+        # Read the dock state on a change notification, or every 5 s as a fallback
+        # (each read makes the driver query the firmware through the ISH).
+        if events or time.monotonic() - last_dock_read >= 5:
+            docked = read_docked(f)
+            last_dock_read = time.monotonic()
+
+if __name__ == "__main__":
+    main()

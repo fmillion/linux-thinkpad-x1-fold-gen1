@@ -10,6 +10,7 @@ Install these on a system running a kernel with `patches/6.18.64` applied.
 | `modprobe.d/thinkpad-x1-fold-audio.conf` | `/etc/modprobe.d/` | AVS audio driver (needs SST firmware: `tools/extract-sst-firmware.sh`) |
 | `wireplumber/51-thinkpad-x1-fold.conf` | `/etc/wireplumber/wireplumber.conf.d/` | stable DMIC node name, hide codec input, "Speakers" |
 | `pipewire/51-thinkpad-x1-fold-mic.conf` | `/etc/pipewire/pipewire.conf.d/` | "Built-in Microphones": 4 DMICs → mono, +18 dB, default source |
+| `helper/thinkpad-fold-helper` (+ `.desktop`) | `~/.local/bin/`, `~/.config/autostart/` | docked mode / rotation / touch-mapping policy |
 | `sddm/10-thinkpad-x1-fold-wayland.conf` | `/etc/sddm.conf.d/` | Wayland (KWin) greeter: correct cursor on the upside-down panel |
 | `plasma/thinkpad-x1-fold-gpu.sh` | `~/.config/plasma-workspace/env/` | **Only for render-only mode** (`i915.lkf_display=0`): KWin renders on i915, scans out via simpledrm |
 

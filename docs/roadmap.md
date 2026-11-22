@@ -15,7 +15,7 @@ graphical sits on **i915 Lakefield + DSI**.
    Expected wins: battery + AC (ACPI `BAT0`/`ADP`), `LID0`, `\_SB.DEVD.DOST` updates, thermals.
 3. Sensors: `hid-sensor-hub` → IIO accel/gyro ×2; identify remaining custom sensors.
 
-## Phase 2 — Dock / posture
+## Phase 2 — Dock / posture — DONE (see docs/dock-mode.md)
 1. `lenovo-fold-dock` platform driver for `LEN009E`: notify handler → `GDST`, `GDSZ`;
    input device with `SW_DOCK` (or `SW_TABLET_MODE` inverted, TBD), sysfs `docked` + `occlusion`.
 2. Optional: HKEY `LEN026A` support in thinkpad_acpi (no-EC mode) for DYTC/platform_profile + hotkeys.
