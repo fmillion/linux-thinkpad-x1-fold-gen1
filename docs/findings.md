@@ -274,3 +274,6 @@ Deliberately not `SW_DOCK` (logind would treat "docked" as a docking station and
   Sample at ~100° open: **hinge 102°, screen 106–107°, keyboard 4°**. Units: degrees
   (scale 0.01745 rad). One-shot `in_angl*_raw` returns 0 (sync GET_REPORT not answered for this
   sensor) — use buffers.
+- Notify path re-verified (no polling): lift → uevent + "keyboard undocked", place → "docked", 5.8 s apart.
+- s2idle fix implemented as patch 0003 (DMI quirk `lps0_screen_off_early`, screen off/on from
+  `.begin`/`.end`). Needs a full kernel build to test (s2idle.c is built-in).
