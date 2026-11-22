@@ -71,3 +71,21 @@ period), "captured firmware MCD D-PHY state" logged.
 - Noise to clean up: WARN in `gen9_wait_for_power_well_fuses` (PW_2), WARN in
   `assert_port_valid`, one unclaimed register, repeated "VBT claims internal and external
   displays on PHY A", SWSCI/PCODE timeouts.
+
+## Power management with i915 driving the panel (2026-11-22)
+- PPS fix (`intel_pps_setup`: PCH base for PCH-less EHL/LKF) removed `Unclaimed read 0x61204`
+  during the DSI power-off sequence.
+- **DPMS off/on** (`kscreen-doctor --dpms off/on`): full VBT power-off/on sequences
+  (GPIO 2/0/3/1 off, 1/3/0/2 on), panel back clean, kernel log clean.
+- **s2idle via power button**: suspended 58 s, resumed instantly with picture; **power LED pulsed**
+  (first time on Linux) → platform reaches its proper standby once the display is really off.
+  No dark wake on this path.
+- **Lid-close path**: ECLite power-source event 0x11 follows ~2–4 s after the lid closes (EC
+  changes charging/PD policy) → dark wake → KWin/powerdevil turn the panel off and re-suspend →
+  on lid-open resume nobody turns the screen on (KWin waits for input). `kscreen-doctor --dpms on`
+  then lights it immediately (kernel resume path incl. runtime D3/DC9 is fine).
+  Fix candidates: userspace helper (screen on after lid-open resume, together with the dock
+  daemon) and/or kernel dark-wake filtering of non-lid ECLite events.
+- Runtime PM is active in display mode (GPU reaches DC9 with the screen off) and resumes cleanly.
+- Still noisy: `gen9_wait_for_power_well_fuses` WARN (PW_2) on every suspend/resume;
+  `Unclaimed read 0x6f400` (TRANS_DDI_FUNC_CTL of the eDP transcoder, absent on LKF).
