@@ -52,3 +52,20 @@ The earlier "Wi-Fi coexistence" result was coincidental (the post-wedge state co
   type it on the keyboard + Enter; then `trust`, `connect`. Keyboard and touchpad work.
 - Dual boot: Windows and Linux share the adapter address but hold different bond keys → pairing
   in one OS breaks the other unless the LTK/IRK are copied across (TODO if dual-boot is kept).
+
+## Bluetooth dead after s2idle — root cause (2026-11-22)
+Symptom: after resume `Frame reassembly failed (-84)`, then every HCI command fails with -56
+(`EBADRQC` = HCI status 0x01 "Unknown HCI Command", e.g. 0x0c01 Set Event Mask, 0x2042 LE Set
+Ext Scan Enable). The controller answers like its **bootloader**: it was reset during suspend.
+`modprobe -r hci_uart; modprobe hci_uart` recovers it (probe pulses reset, full firmware download).
+
+Cause, from ACPI:
+- SSDT5 (`Lkf_Rvp1`): `\_SB.PCI0.UA01.BTH0._PS0 = BTRK(1)`, `_PS3 = BTRK(0)`; `BTRK` drives the
+  BT kill GPIO `GBTK` (pad 183, gpio offset 194, = the driver's "reset" line).
+- DSDT `BTH0`: `_S0W = 2`, no `_PS1/_PS2`, host wake = `GpioInt(ExclusiveAndWake)` `GBTI`.
+- The serdev device `serial0-0` uses the ACPI PM domain. For s2idle Linux evaluates `_S0W` (only
+  when the device may wake *and* has a wake IRQ registered), and when the returned D-state (D2) is
+  not supported it **falls back to D3cold** (drivers/acpi/device_pm.c). Not wake-capable at all
+  (current state) → D3 anyway. D3 → `_PS3` → kill line asserted → controller powered off.
+- `hci_intel` has no PM handling on the serdev path (`intel_pm_ops`/LPM are platform-device only;
+  `intel_set_power()` returns early for serdev), so it does not notice the reset.
