@@ -1,4 +1,4 @@
-From 4d5a4cef9dfa0482991fa1f10a39368a6bc20911 Mon Sep 17 00:00:00 2001
+From d06a863382360073d77cb67d4772a72c0e000e44 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 06:19:10 +0000
 Subject: [PATCH 07/42] drm/i915: Lakefield: optional dump of firmware display

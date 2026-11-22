@@ -1,4 +1,4 @@
-From 116d17bc99e45e4f00b4490deba3cb22784724f9 Mon Sep 17 00:00:00 2001
+From 0ef227c840bd5ce894ef2cac4bde17064b519d8b Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 12:00:01 +0000
 Subject: [PATCH 42/42] Bluetooth: hci_intel: serdev: retry the whole setup;

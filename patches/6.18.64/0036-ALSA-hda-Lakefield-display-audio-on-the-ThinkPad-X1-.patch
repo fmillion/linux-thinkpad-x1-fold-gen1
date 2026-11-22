@@ -1,4 +1,4 @@
-From cee2774cbcc23f860680575a2f715fc054b5b9e9 Mon Sep 17 00:00:00 2001
+From 7c816e447af05d19bb323e590bdd7dd18c3b88ec Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 10:42:42 +0000
 Subject: [PATCH 36/42] ALSA: hda: Lakefield display audio on the ThinkPad X1

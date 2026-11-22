@@ -1,4 +1,4 @@
-From 1bf42790f961674a0f3b52d345fe5a811014b5bd Mon Sep 17 00:00:00 2001
+From c1b75cb776399feec097a7b3279abbb7577913f4 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 11:38:56 +0000
 Subject: [PATCH 40/42] drm/i915: Lakefield: lkf_tc auto, on for the ThinkPad

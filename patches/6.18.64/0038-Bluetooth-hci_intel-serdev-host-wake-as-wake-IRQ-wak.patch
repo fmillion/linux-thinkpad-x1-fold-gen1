@@ -1,4 +1,4 @@
-From a5f3af719360986080cc9d4d9e22bb897bb8c37b Mon Sep 17 00:00:00 2001
+From 52477357a87949867bdd92fa3f0338e42614862a Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 11:17:35 +0000
 Subject: [PATCH 38/42] Bluetooth: hci_intel: serdev: host-wake as wake IRQ,

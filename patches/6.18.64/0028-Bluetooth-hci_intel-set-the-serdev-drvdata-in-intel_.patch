@@ -1,4 +1,4 @@
-From efc837c608beb1473080279ea318eb1f233da813 Mon Sep 17 00:00:00 2001
+From 705a61ccd9dbfc28d76d016180b56fa867cb97ec Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 08:31:51 +0000
 Subject: [PATCH 28/42] Bluetooth: hci_intel: set the serdev drvdata in

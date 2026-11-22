@@ -1,4 +1,4 @@
-From 293903ead1ba46faf76c08297d2509a5b8cef849 Mon Sep 17 00:00:00 2001
+From 8745b6651696650bfa29910d6b440d7444230718 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 11:55:26 +0000
 Subject: [PATCH 41/42] drm/i915: Lakefield: only combo PHY A; no eDP PSR IRQ

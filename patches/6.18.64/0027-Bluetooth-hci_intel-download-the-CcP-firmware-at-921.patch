@@ -1,4 +1,4 @@
-From 48342d261aafd304bd6816010d46b5b4b862c44e Mon Sep 17 00:00:00 2001
+From f275fc2555547a108045665de9e5dedc0535174e Mon Sep 17 00:00:00 2001
 From: Cai Yu <caiyu7372@gmail.com>
 Date: Sat, 26 Sep 2026 07:40:43 +0800
 Subject: [PATCH 27/42] Bluetooth: hci_intel: download the CcP firmware at

@@ -1,4 +1,4 @@
-From 1a39021e1a90825855c6b5e5f615129d96a8d70a Mon Sep 17 00:00:00 2001
+From 1137e77e10fa5092345b5de063c0453964cede00 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 07:19:55 +0000
 Subject: [PATCH 21/42] drm/i915: Lakefield: do not use DC5/DC6

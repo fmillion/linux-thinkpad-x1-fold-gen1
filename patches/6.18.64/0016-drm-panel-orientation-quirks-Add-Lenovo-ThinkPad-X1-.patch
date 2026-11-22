@@ -1,4 +1,4 @@
-From 93a3fd68de57dfa7b81ae07c4d1a065f8d4d4bf0 Mon Sep 17 00:00:00 2001
+From 4692dc4a9672ee3fab6164b6dc99212ffa9d656c Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 06:41:54 +0000
 Subject: [PATCH 16/42] drm: panel-orientation-quirks: Add Lenovo ThinkPad X1

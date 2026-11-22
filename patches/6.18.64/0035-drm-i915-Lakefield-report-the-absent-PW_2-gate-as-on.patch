@@ -1,4 +1,4 @@
-From 794b5569f2ec0485f6b26dbf0fc56ed6ba8c964c Mon Sep 17 00:00:00 2001
+From 3cb7a7f12190c05758660c227deca1151f85dc97 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 10:34:37 +0000
 Subject: [PATCH 35/42] drm/i915: Lakefield: report the absent PW_2 gate as on

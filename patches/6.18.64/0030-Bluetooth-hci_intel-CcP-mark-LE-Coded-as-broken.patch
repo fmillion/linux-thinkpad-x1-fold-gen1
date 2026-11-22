@@ -1,4 +1,4 @@
-From 34058cd40f9fe8c4ff2722378ba695acfce85134 Mon Sep 17 00:00:00 2001
+From 9dbd916139d9a14e1e59075aa06ec8bbc2b96fcd Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 09:04:04 +0000
 Subject: [PATCH 30/42] Bluetooth: hci_intel: CcP: mark LE Coded as broken

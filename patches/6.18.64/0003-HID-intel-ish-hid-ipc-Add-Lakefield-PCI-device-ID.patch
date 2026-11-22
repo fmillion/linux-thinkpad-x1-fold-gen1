@@ -1,4 +1,4 @@
-From 4c7e3a0af4141f6f2f77f605c824369ae85373df Mon Sep 17 00:00:00 2001
+From 49f74e73003dd3aed4af1df92a7e4b2d589bdce2 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 01:15:21 +0000
 Subject: [PATCH 03/42] HID: intel-ish-hid: ipc: Add Lakefield PCI device ID

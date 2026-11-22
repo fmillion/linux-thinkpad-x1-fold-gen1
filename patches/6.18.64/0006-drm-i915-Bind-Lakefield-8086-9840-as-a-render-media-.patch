@@ -1,4 +1,4 @@
-From 55d89a99bf521a512990ab83e333b2189da88bcb Mon Sep 17 00:00:00 2001
+From ed96fc08a2050b94bc9626c35b6afcab2a78f830 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 05:36:32 +0000
 Subject: [PATCH 06/42] drm/i915: Bind Lakefield (8086:9840) as a

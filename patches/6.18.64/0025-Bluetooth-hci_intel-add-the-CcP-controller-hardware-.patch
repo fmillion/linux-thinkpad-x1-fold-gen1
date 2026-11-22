@@ -1,4 +1,4 @@
-From dbed921fd052d2cd41d33fa5778e10b7d50e7006 Mon Sep 17 00:00:00 2001
+From 6b1e84d74bc67625202b702f6f6f28582187ad59 Mon Sep 17 00:00:00 2001
 From: Cai Yu <caiyu7372@gmail.com>
 Date: Sat, 26 Sep 2026 07:40:41 +0800
 Subject: [PATCH 25/42] Bluetooth: hci_intel: add the CcP controller (hardware
