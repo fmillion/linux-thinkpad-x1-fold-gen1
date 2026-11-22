@@ -1,7 +1,7 @@
-From 8745b6651696650bfa29910d6b440d7444230718 Mon Sep 17 00:00:00 2001
+From a5ff81ebb473d5ca26b698aa81053c7fa9b85721 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 11:55:26 +0000
-Subject: [PATCH 41/42] drm/i915: Lakefield: only combo PHY A; no eDP PSR IRQ
+Subject: [PATCH 41/43] drm/i915: Lakefield: only combo PHY A; no eDP PSR IRQ
  regs without eDP
 
 - Lakefield has a single combo PHY (A, driving the DSI panel); the PHY B/C

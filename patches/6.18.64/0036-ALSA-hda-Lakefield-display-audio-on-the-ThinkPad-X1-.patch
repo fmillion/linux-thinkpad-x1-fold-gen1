@@ -1,7 +1,7 @@
-From 7c816e447af05d19bb323e590bdd7dd18c3b88ec Mon Sep 17 00:00:00 2001
+From 985671249545f08e7c0a6ec1016d9dd1e72e889e Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 10:42:42 +0000
-Subject: [PATCH 36/42] ALSA: hda: Lakefield display audio on the ThinkPad X1
+Subject: [PATCH 36/43] ALSA: hda: Lakefield display audio on the ThinkPad X1
  Fold Gen 1
 
 - i915_gfx_present(): Lakefield (8086:9840) is denylisted because i915 did

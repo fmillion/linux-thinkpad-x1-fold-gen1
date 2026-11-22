@@ -1,7 +1,7 @@
-From 705a61ccd9dbfc28d76d016180b56fa867cb97ec Mon Sep 17 00:00:00 2001
+From 539418d02676eba041cc9aa15acb6fc6c31ddf7f Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 08:31:51 +0000
-Subject: [PATCH 28/42] Bluetooth: hci_intel: set the serdev drvdata in
+Subject: [PATCH 28/43] Bluetooth: hci_intel: set the serdev drvdata in
  intel_serdev_probe()
 
 hci_serdev.c finds the hci_uart through the serdev drvdata. Without it

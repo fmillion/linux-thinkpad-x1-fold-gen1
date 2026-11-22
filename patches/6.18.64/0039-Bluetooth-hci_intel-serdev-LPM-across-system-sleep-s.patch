@@ -1,7 +1,7 @@
-From 3fa031305a7ff8d9af697b7f9fbbdb0fbd334311 Mon Sep 17 00:00:00 2001
+From f8ffcbcb9a2dad12cb1a4f94530fa036a7373ede Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 11:35:38 +0000
-Subject: [PATCH 39/42] Bluetooth: hci_intel: serdev: LPM across system sleep,
+Subject: [PATCH 39/43] Bluetooth: hci_intel: serdev: LPM across system sleep,
  setup retry
 
 System sleep with the controller kept powered (wakeup enabled, see the ACPI

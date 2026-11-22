@@ -1,7 +1,7 @@
 From d06a863382360073d77cb67d4772a72c0e000e44 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 06:19:10 +0000
-Subject: [PATCH 07/42] drm/i915: Lakefield: optional dump of firmware display
+Subject: [PATCH 07/43] drm/i915: Lakefield: optional dump of firmware display
  state (lkf_dump)
 
 Bring-up aid: with i915.lkf_dump=1, log the display, DSI transcoder,

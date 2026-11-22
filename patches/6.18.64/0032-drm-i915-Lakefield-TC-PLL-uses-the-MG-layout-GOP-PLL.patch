@@ -1,7 +1,7 @@
-From d2633ec260ed9b5cf6cf890a9827139a5ee6328f Mon Sep 17 00:00:00 2001
+From f05a82ced0f59ce0611f452d47dfa74b85a40a2f Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 10:03:59 +0000
-Subject: [PATCH 32/42] drm/i915: Lakefield: TC PLL uses the MG layout; GOP
+Subject: [PATCH 32/43] drm/i915: Lakefield: TC PLL uses the MG layout; GOP
  PLL/swing tables
 
 Run 1 of i915.lkf_tc: AUX/EDID and the FIA handshake work, but the TC PLL
