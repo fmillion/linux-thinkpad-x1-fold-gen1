@@ -48,3 +48,26 @@ Galaxy Book S (1920×1080, ~887 Mb/s/lane) for comparison: data 0x08110505/0x0a0
   Default entry stays render-only. Journal is persistent → read failed boots with `journalctl -b -1`.
 - Temporary on the external install: `/etc/modprobe.d/zz-thinkpad-x1-fold-i915-debug.conf`
   (`lkf_dump=1`). Remove both after bring-up.
+
+## Result — first i915 display boot (2026-11-22)
+`i915.lkf_display=1 i915.enable_dc=0`: fastset refused (port clock 258171 vs 258000 kHz) →
+**full modeset through the DSI enable path with the MCD restore → panel lit**.
+`card1-DSI-1` connected 1536x2048@60.02, fbdev `i915drmfb`, `intel_backlight` max 19393 (= GOP PWM
+period), "captured firmware MCD D-PHY state" logged.
+- Dump (2nd boot): `SHOTPLUG_CTL_DDI` 0xC4030 = 0x4 and `PP_STATUS/PP_CONTROL` 0xC7200/04 =
+  0x80000008/0x7 **exist** on LKF → VBT native GPIO ops land on real registers.
+- **Panel is mounted upside down**: GOP `PLANE_CTL 1A` = 0x8400000a (`ROTATE_180`). Fixed with a
+  `drm_panel_orientation_quirks` DMI entry (1536x2048, BOTTOM_UP) — kernel image rebuild.
+  - SDDM (X11 greeter): picture upright via Xorg software rotation, **HW cursor not rotated**
+    (Xorg limitation) → switch SDDM to its Wayland greeter.
+  - KWin reused a stale per-user output config from the simpledrm sessions (same "no EDID"
+    identity, `transform: Normal`), so it ignored the new panel orientation. Fixed by setting the
+    output to inverted (`kscreen-doctor output.DSI-1.rotation.inverted`). Fresh users get the
+    panel orientation as default.
+- Raw scanout is upside down relative to the logical picture: the keyboard occlusion from `GDSZ`
+  (logical rows 1006–2047) covers **raw rows 0–1041**. Matters for the docked mode.
+- User report: desktop correct, **brightness slider drives the PWM**, compositing accelerated,
+  video playback works, WebGL Fishbowl 1000 fish @ 60 fps.
+- Noise to clean up: WARN in `gen9_wait_for_power_well_fuses` (PW_2), WARN in
+  `assert_port_valid`, one unclaimed register, repeated "VBT claims internal and external
+  displays on PHY A", SWSCI/PCODE timeouts.
