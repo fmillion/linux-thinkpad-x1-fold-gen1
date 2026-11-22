@@ -5,3 +5,8 @@
 # suspend-to-idle so that opening the lid wakes the machine (as on Windows) and the lid state
 # seen by logind stays correct.
 ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x98fc", ATTR{power/wakeup}="enabled"
+
+# The Wacom touch digitizer (056a:5102, behind the Intel THC / ithc) reports coordinates in the
+# panel's native frame, and the panel is mounted upside down (see the panel orientation quirk).
+# Rotate touch by 180 degrees.
+ACTION=="add|change", KERNEL=="event*", SUBSYSTEM=="input", ENV{ID_INPUT_TOUCHSCREEN}=="1", ATTRS{id/vendor}=="056a", ATTRS{id/product}=="5102", ENV{LIBINPUT_CALIBRATION_MATRIX}="-1 0 1 0 -1 1"

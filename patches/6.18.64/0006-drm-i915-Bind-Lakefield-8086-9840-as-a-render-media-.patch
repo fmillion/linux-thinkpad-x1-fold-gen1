@@ -1,7 +1,7 @@
 From 55d89a99bf521a512990ab83e333b2189da88bcb Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 05:36:32 +0000
-Subject: [PATCH 06/21] drm/i915: Bind Lakefield (8086:9840) as a
+Subject: [PATCH 06/22] drm/i915: Bind Lakefield (8086:9840) as a
  render/media-only Gen11 GT
 
 i915 has no Lakefield platform. Its Gen11 GT behaves like Elkhart Lake's

@@ -1,0 +1,49 @@
+From 13973aa4984191dfcf57d860debf89332f5a8d98 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 07:34:38 +0000
+Subject: [PATCH 22/22] iommu/vt-d: Skip MSI source-id verification for the
+ Lakefield THC
+
+The Intel Touch Host Controller on Lakefield sends MSIs with a requester
+ID that does not match its BDF; with interrupt remapping enabled they
+are blocked and the touchscreen (ithc) never initialises. Disable source
+ID verification for this PCI function only, instead of system-wide with
+intremap=nosid.
+
+Workaround from github.com/quo/ithc-linux (intel-iommu.patch),
+narrowed to Lakefield's 8086:98d0/98d1.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/iommu/intel/irq_remapping.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/drivers/iommu/intel/irq_remapping.c b/drivers/iommu/intel/irq_remapping.c
+index 8bcbfe3d9..65142bb71 100644
+--- a/drivers/iommu/intel/irq_remapping.c
++++ b/drivers/iommu/intel/irq_remapping.c
+@@ -381,6 +381,21 @@ static int set_msi_sid(struct irte *irte, struct pci_dev *dev)
+ 	data.busmatch_count = 0;
+ 	pci_for_each_dma_alias(dev, set_msi_sid_cb, &data);
+ 
++	/*
++	 * The Lakefield Intel Touch Host Controller (00:11.0) sends its MSIs
++	 * with a requester ID that does not match its own BDF, so with source
++	 * ID verification its interrupts are silently blocked and the
++	 * touchscreen never initialises (report descriptor reads time out).
++	 * Skip verification for this function only.
++	 * Workaround from github.com/quo/ithc-linux (intel-iommu.patch).
++	 */
++	if (dev->vendor == PCI_VENDOR_ID_INTEL &&
++	    (dev->class >> 8) == PCI_CLASS_INPUT_PEN &&
++	    (dev->device == 0x98d0 || dev->device == 0x98d1)) {
++		set_irte_sid(irte, SVT_NO_VERIFY, SQ_ALL_16, 0);
++		return 0;
++	}
++
+ 	/*
+ 	 * DMA alias provides us with a PCI device and alias.  The only case
+ 	 * where the it will return an alias on a different bus than the
+-- 
+2.56.1
+
