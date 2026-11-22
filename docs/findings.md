@@ -121,8 +121,9 @@ KMDF driver on `ACPI\LEN009E` with `vhf` lower filter. PDB path
 ### 4.3 Live values (probe via the IOCTLs above, read-only)
 - `GDST = 1`, `GDSZ = (0, 1006, 1536, 1042)` ⇒ in native (portrait 1536×2048) scan-out
   coordinates the keyboard covers rows **1006–2047**; usable area = **1536×1006 at the top**.
-  - At probe time Windows was in its docked layout (desktop mode 1536×1006, see §5) ⇒ **`GDST=1`
-    means docked** (inferred; TODO confirm by undocking and re-probing; check if GDSZ changes).
+  - **Confirmed by toggling:** docked → `GDST=1`, desktop `1536x1006`; undocked → `GDST=0`,
+    desktop `1536x2048`. **`GDSZ` is static** `(0, 1006, 1536, 1042)` in both states (it describes
+    where the keyboard *would* sit, not whether it is there).
 
 ### 4.4 Linux plan (draft)
 1. ISH: add `8086:98FC` to `intel-ish-hid`; verify ISH firmware is BIOS-loaded on LKF.
