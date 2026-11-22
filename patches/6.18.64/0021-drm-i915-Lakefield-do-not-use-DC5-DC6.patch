@@ -1,0 +1,41 @@
+From 1a39021e1a90825855c6b5e5f615129d96a8d70a Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 07:19:55 +0000
+Subject: [PATCH 21/21] drm/i915: Lakefield: do not use DC5/DC6
+
+With DC5/DC6 enabled on the ThinkPad X1 Fold Gen 1 the DMC program is
+lost across s2idle and the display does not come back: after resume all
+pipe A and DPLL state reads back as 0, assert_dmc_loaded() warns and
+page flips time out. With DC5/6 disabled suspend/resume, DPMS and
+runtime suspend (DC9) all work. A lit video-mode DSI panel keeps the
+display busy, so DC5/6 were never entered in normal use anyway (DMC
+DC3->DC5 counter 0). DC9, which does not involve the DMC, stays allowed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_display_power.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display_power.c b/drivers/gpu/drm/i915/display/intel_display_power.c
+index da4babfd6..c436faa54 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_power.c
++++ b/drivers/gpu/drm/i915/display/intel_display_power.c
+@@ -965,6 +965,15 @@ static u32 get_allowed_dc_mask(struct intel_display *display, int enable_dc)
+ 		max_dc = 4;
+ 	else if (display->platform.geminilake || display->platform.broxton)
+ 		max_dc = 1;
++	else if (to_pci_dev(display->drm->dev)->device == 0x9840)
++		/*
++		 * Lakefield: with DC5/DC6 enabled the DMC program is lost across
++		 * s2idle and the display does not come back (all pipe/DPLL
++		 * state reads 0, flip_done timeouts). A lit video-mode DSI panel
++		 * never lets the display idle into DC5/6 anyway. DC9 (runtime
++		 * and system suspend, no DMC involved) stays allowed below.
++		 */
++		max_dc = 0;
+ 	else if (DISPLAY_VER(display) >= 9)
+ 		max_dc = 2;
+ 	else
+-- 
+2.56.1
+

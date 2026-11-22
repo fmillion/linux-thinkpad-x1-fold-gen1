@@ -98,3 +98,11 @@ reproduce the work tree exactly. Additional cleanups: absent PW_2 skips the fuse
 default (DMC `icl_dmc_ver1_09` loads) — first boots in this configuration are the DC5/DC6 test.
 Removed from the external install: test GRUB entry, `zz-…-i915-debug.conf`, Plasma env script.
 Added: SDDM Wayland greeter config.
+
+### DC5/DC6 break s2idle resume (fixed by patch 0021)
+First default boot (enable_dc=-1): DPMS fine, but power-button resume left the panel black:
+after resume all pipe A / DPLL state read 0 (`cfgcr0 0x0`), `assert_dmc_loaded` WARNs (DMC
+program lost), `flip_done timed out`. The earlier successful resumes were with `enable_dc=0`.
+DMC DC3→DC5 / DC5→DC6 counters stay 0 with the panel lit (video-mode DSI never idles), so
+DC5/6 bring nothing. Patch 0021: `max_dc = 0` on Lakefield (DC9 still allowed: runtime/system
+suspend, no DMC).
