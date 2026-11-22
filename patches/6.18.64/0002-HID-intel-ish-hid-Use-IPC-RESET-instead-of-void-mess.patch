@@ -1,7 +1,7 @@
 From 5bd23b12b9fe15e06a9f13df47d2eef7a80bca90 Mon Sep 17 00:00:00 2001
 From: Zhang Lixu <lixu.zhang@intel.com>
 Date: Fri, 17 Oct 2025 10:22:17 +0800
-Subject: [PATCH 02/30] HID: intel-ish-hid: Use IPC RESET instead of void
+Subject: [PATCH 02/35] HID: intel-ish-hid: Use IPC RESET instead of void
  message in ish_wakeup()
 
 commit 507561b00ac2481eaf5fd790801f2ca135f23ff0 upstream.

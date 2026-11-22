@@ -70,3 +70,25 @@ their defaults (check if link training fails). PLL enable is `MG_PLL_ENABLE0` 0x
 - TC mode: the ICL FIA ops (DFLEXDPSP live state / DFLEXDPCSSS ownership / DFLEXDPPMS ready),
   DP alt mode only; legacy and TBT modes not present.
 - PLLs: EHL combo DPLL0/1/4 for port B, `MG_PLL1/2` (0x46030/0x46034) as Dekel PLLs for D/E.
+
+## Bring-up log (i915.lkf_tc, patches 0031-0036)
+Method: one-shot GRUB entry booting with `modprobe.blacklist=i915 systemd.unit=multi-user.target`,
+netconsole (UDP to the dev host) + `ssh dmesg -w`, then `modprobe i915 lkf_tc=1 drm.debug=0x06`
+by hand. A hang only costs a power cycle; the next boot is the normal entry.
+| Run | Result | Cause → fix |
+|---|---|---|
+| boot with lkf_tc=1 | hard hang in the initramfs, nothing logged | → move the test to a manual modprobe with netconsole |
+| 1 | AUX/EDID/FIA fine; `PLL 3 not locked`, training fails, hang | TGL Dekel PLL values written — the LKF TC PLL has the **ICL MG layout** behind the Dekel window → GOP 38.4 MHz table (0032) |
+| 2 | divide-error oops in `hsw_compute_linetime_wm` | `port_clock` decoded with the ICL MG decoder = 0 → table-based frequency (0033) |
+| 3 | PLL locks; `Unclaimed read 0x64340`, DDI BUF D never active | per-port `DP_TP_CTL` does not exist: LKF has the **TGL transcoder interface** (per-transcoder DP_TP, TGL port/clock select encodings) (0034) |
+| 4 | **link training passes**, picture on the external monitor; pipe B reads back inactive, no vblank IRQs (flip timeouts) | transcoder/pipe B domains hang off PW_2, which never accepts a request → report PW_2 on (0035) |
+| 5 | full boot into SDDM with `i915.lkf_tc=1`: DSI-1 + DP-1 on pipes A/B, no errors | — |
+
+Lakefield's external display path, as established:
+- **PHY addressing / TX / DP mode:** TGL Dekel (HIP_INDEX windows at 0x168000/0x169000;
+  `DKL_TX_DPCNTL0/1/2`, `DKL_DP_MODE`, `DKL_CMN_UC_DW_27` health), own swing table, DPCNTL2 bit 2 set.
+- **PLL:** ICL MG register semantics in the Dekel PLL window; GOP table for 1.62/2.7/5.4/8.1 GHz.
+- **FIA, TC HPD, DDI_CLK_SEL, MG_PLL_ENABLE:** ICL.
+- **Transcoder side:** TGL (per-transcoder DP_TP_CTL, TRANS_DDI_FUNC_CTL port bits 31:27,
+  TRANS_CLK_SEL (port+1)<<28).
+- **PW_2:** absent; transcoders B/C work without it.

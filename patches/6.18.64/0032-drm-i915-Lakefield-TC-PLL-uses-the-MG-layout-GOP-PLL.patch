@@ -1,0 +1,334 @@
+From 9e542072119efcc91bb0b5142f8e251f9cf20c78 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 10:03:59 +0000
+Subject: [PATCH 32/35] drm/i915: Lakefield: TC PLL uses the MG layout; GOP
+ PLL/swing tables
+
+Run 1 of i915.lkf_tc: AUX/EDID and the FIA handshake work, but the TC PLL
+never locks ("PLL 3 not locked") - and the machine hangs once the pipe is
+enabled without a clock.
+
+The Lakefield GOP shows why: the TC PLL registers sit behind the Dekel HIP
+window (DKL_PLL_* offsets), but have the ICL MG PLL layout (fraction in DIV0,
+FBPREDIV in DIV1, LF, FRAC_LOCK, MG CLKTOP2 encodings). The GOP programs them
+from a fixed table for the 38.4 MHz reference (DIV0, DIV1, LF, FRAC_LOCK, SSC,
+0x222c, 0x2130, HSCLKCTL, CORECLKCTL1), for 1.62/2.7/5.4/8.1 GHz only.
+
+- Lakefield TC PLL funcs: compute from that table (SSC off), write/readout in
+  the GOP order, frequency from the table.
+- DP source rates on the TC ports limited to the table's.
+- Lakefield DP swing table from the GOP; DPCNTL2 bit 2 set as the GOP does;
+  no PMD_LANE_SUS write (the GOP never touches it).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_ddi.c      |   8 +-
+ .../drm/i915/display/intel_ddi_buf_trans.c    |  30 +++-
+ drivers/gpu/drm/i915/display/intel_dp.c       |   8 +
+ drivers/gpu/drm/i915/display/intel_dpll_mgr.c | 156 +++++++++++++++++-
+ 4 files changed, 195 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_ddi.c b/drivers/gpu/drm/i915/display/intel_ddi.c
+index e2bd88d59..2320c1688 100644
+--- a/drivers/gpu/drm/i915/display/intel_ddi.c
++++ b/drivers/gpu/drm/i915/display/intel_ddi.c
+@@ -1413,7 +1413,9 @@ static void tgl_dkl_phy_set_signal_levels(struct intel_encoder *encoder,
+ 			}
+ 		}
+ 
+-		intel_dkl_phy_write(display, DKL_TX_PMD_LANE_SUS(tc_port, ln), 0);
++		/* Lakefield GOP does not touch PMD_LANE_SUS */
++		if (!intel_display_lkf_tc(display))
++			intel_dkl_phy_write(display, DKL_TX_PMD_LANE_SUS(tc_port, ln), 0);
+ 
+ 		level = intel_ddi_level(encoder, crtc_state, 2*ln+0);
+ 
+@@ -1435,8 +1437,10 @@ static void tgl_dkl_phy_set_signal_levels(struct intel_encoder *encoder,
+ 				  DKL_TX_DE_EMPHASIS_COEFF(trans->entries[level].dkl.de_emphasis) |
+ 				  DKL_TX_VSWING_CONTROL(trans->entries[level].dkl.vswing));
+ 
++		/* Lakefield GOP sets DPCNTL2 bit 2 (DP20BITMODE on TGL), TGL clears it */
+ 		intel_dkl_phy_rmw(display, DKL_TX_DPCNTL2(tc_port, ln),
+-				  DKL_TX_DP20BITMODE, 0);
++				  DKL_TX_DP20BITMODE,
++				  intel_display_lkf_tc(display) ? DKL_TX_DP20BITMODE : 0);
+ 
+ 		if (display->platform.alderlake_p) {
+ 			u32 val;
+diff --git a/drivers/gpu/drm/i915/display/intel_ddi_buf_trans.c b/drivers/gpu/drm/i915/display/intel_ddi_buf_trans.c
+index ca9702076..068c46207 100644
+--- a/drivers/gpu/drm/i915/display/intel_ddi_buf_trans.c
++++ b/drivers/gpu/drm/i915/display/intel_ddi_buf_trans.c
+@@ -647,6 +647,26 @@ static const struct intel_ddi_buf_trans icl_mg_phy_trans_hdmi = {
+ 	.hdmi_default_entry = ARRAY_SIZE(_icl_mg_phy_trans_hdmi) - 1,
+ };
+ 
++/* Lakefield TC PHY, from the Lakefield GOP (vswing ctl, preshoot, de-emphasis) */
++static const union intel_ddi_buf_trans_entry _lkf_tc_phy_trans_dp[] = {
++	{ .dkl = { 0x6, 0x0, 0x00 } },	/* 0	0 */
++	{ .dkl = { 0x4, 0x0, 0x0E } },	/* 0	1 */
++	{ .dkl = { 0x1, 0x0, 0x0C } },	/* 0	2 */
++	{ .dkl = { 0x0, 0x0, 0x17 } },	/* 0	3 */
++	{ .dkl = { 0x4, 0x0, 0x00 } },	/* 1	0 */
++	{ .dkl = { 0x1, 0x0, 0x08 } },	/* 1	1 */
++	{ .dkl = { 0x0, 0x0, 0x13 } },	/* 1	2 */
++	{ .dkl = { 0x2, 0x0, 0x00 } },	/* 2	0 */
++	{ .dkl = { 0x0, 0x0, 0x0B } },	/* 2	1 */
++	{ .dkl = { 0x0, 0x0, 0x00 } },	/* 3	0 */
++};
++
++static const struct intel_ddi_buf_trans lkf_tc_phy_trans_dp = {
++	.entries = _lkf_tc_phy_trans_dp,
++	.num_entries = ARRAY_SIZE(_lkf_tc_phy_trans_dp),
++	.hdmi_default_entry = ARRAY_SIZE(_lkf_tc_phy_trans_dp) - 1,
++};
++
+ static const union intel_ddi_buf_trans_entry _tgl_dkl_phy_trans_dp_hbr[] = {
+ 					/* VS	pre-emp	Non-trans mV	Pre-emph dB */
+ 	{ .dkl = { 0x7, 0x0, 0x00 } },	/* 0	0	400mV		0 dB */
+@@ -1638,6 +1658,14 @@ tgl_get_dkl_buf_trans_dp(struct intel_encoder *encoder,
+ 	}
+ }
+ 
++static const struct intel_ddi_buf_trans *
++lkf_get_tc_buf_trans(struct intel_encoder *encoder,
++		     const struct intel_crtc_state *crtc_state,
++		     int *n_entries)
++{
++	return intel_get_buf_trans(&lkf_tc_phy_trans_dp, n_entries);
++}
++
+ static const struct intel_ddi_buf_trans *
+ tgl_get_dkl_buf_trans(struct intel_encoder *encoder,
+ 		      const struct intel_crtc_state *crtc_state,
+@@ -1735,7 +1763,7 @@ void intel_ddi_buf_trans_init(struct intel_encoder *encoder)
+ 		else
+ 			encoder->get_buf_trans = tgl_get_dkl_buf_trans;
+ 	} else if (intel_display_lkf_tc(display) && !intel_encoder_is_combo(encoder)) {
+-		encoder->get_buf_trans = tgl_get_dkl_buf_trans;
++		encoder->get_buf_trans = lkf_get_tc_buf_trans;
+ 	} else if (DISPLAY_VER(display) == 11) {
+ 		if (display->platform.jasperlake)
+ 			encoder->get_buf_trans = jsl_get_combo_buf_trans;
+diff --git a/drivers/gpu/drm/i915/display/intel_dp.c b/drivers/gpu/drm/i915/display/intel_dp.c
+index 84fca860c..c46c87399 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp.c
++++ b/drivers/gpu/drm/i915/display/intel_dp.c
+@@ -580,6 +580,9 @@ intel_dp_set_source_rates(struct intel_dp *intel_dp)
+ 	static const int g4x_rates[] = {
+ 		162000, 270000
+ 	};
++	static const int lkf_tc_rates[] = {
++		162000, 270000, 540000, 810000
++	};
+ 	struct intel_display *display = to_intel_display(intel_dp);
+ 	const int *source_rates;
+ 	int size, max_rate = 0, vbt_max_rate;
+@@ -597,6 +600,11 @@ intel_dp_set_source_rates(struct intel_dp *intel_dp)
+ 			size = ARRAY_SIZE(mtl_rates);
+ 		}
+ 		max_rate = mtl_max_source_rate(intel_dp);
++	} else if (intel_display_lkf_tc(display) &&
++		   intel_encoder_is_tc(&dp_to_dig_port(intel_dp)->base)) {
++		source_rates = lkf_tc_rates;
++		size = ARRAY_SIZE(lkf_tc_rates);
++		max_rate = 810000;
+ 	} else if (DISPLAY_VER(display) >= 11) {
+ 		source_rates = icl_rates;
+ 		size = ARRAY_SIZE(icl_rates);
+diff --git a/drivers/gpu/drm/i915/display/intel_dpll_mgr.c b/drivers/gpu/drm/i915/display/intel_dpll_mgr.c
+index 6e0c9c976..689afe865 100644
+--- a/drivers/gpu/drm/i915/display/intel_dpll_mgr.c
++++ b/drivers/gpu/drm/i915/display/intel_dpll_mgr.c
+@@ -3002,6 +3002,142 @@ static int icl_mg_pll_find_divisors(int clock_khz, bool is_dp, bool use_ssc,
+  * The specification for this function uses real numbers, so the math had to be
+  * adapted to integer-only calculation, that's why it looks so different.
+  */
++/*
++ * Lakefield TC PLL. The registers sit behind the Dekel HIP window like TGL's
++ * (DKL_PLL_* offsets), but they have the ICL MG PLL layout (fraction in DIV0,
++ * FBPREDIV in DIV1, LF/FRAC_LOCK, MG CLKTOP2 encodings). The Lakefield GOP
++ * programs them from a fixed table for the 38.4 MHz reference; the values
++ * below are that table (window 2: 0x200 DIV0, 0x204 DIV1, 0x208 LF,
++ * 0x20c FRAC_LOCK, 0x210 SSC, 0x22c, window 1: 0x130, window 0: 0xd4
++ * HSCLKCTL, 0xd8 CORECLKCTL1). SSC is left disabled (bit 28 clear).
++ */
++#define LKF_TC_PLL_REG(tc_port, off)	_DKL_REG(tc_port, off)
++#define LKF_TC_PLL_SSC_EN		REG_BIT(28)
++
++static const struct lkf_tc_pll_entry {
++	int clock;
++	u32 div0, div1, lf, frac_lock, ssc, r22c, r130, hsclkctl, coreclkctl1;
++} lkf_tc_pll_38400[] = {
++	{ 162000, 0x5e000069, 0x00041011, 0x22114803, 0x00052d23, 0x1813120f,
++	  0x4044ff6e, 0x02158888, 0x0000211d, 0x10080510 },
++	{ 270000, 0x6800008c, 0x00041011, 0x22114904, 0x00052d1a, 0x18131215,
++	  0x4044ff14, 0x02158888, 0x0001421d, 0x10080510 },
++	{ 540000, 0x6800008c, 0x00041011, 0x22114904, 0x00052d1a, 0x18131215,
++	  0x4044ff14, 0x02158888, 0x0000011d, 0x10080510 },
++	{ 810000, 0x5e000069, 0x00041011, 0x22114803, 0x00052d23, 0x1813120f,
++	  0x4044ff6e, 0x021588a8, 0x0000811d, 0x10080510 },
++};
++
++static int lkf_calc_tc_pll_state(struct intel_crtc_state *crtc_state,
++				 struct intel_dpll_hw_state *dpll_hw_state)
++{
++	struct intel_display *display = to_intel_display(crtc_state);
++	struct icl_dpll_hw_state *hw_state = &dpll_hw_state->icl;
++	int i;
++
++	if (display->dpll.ref_clks.nssc != 38400 ||
++	    intel_crtc_has_type(crtc_state, INTEL_OUTPUT_HDMI))
++		return -EINVAL;
++
++	for (i = 0; i < ARRAY_SIZE(lkf_tc_pll_38400); i++) {
++		const struct lkf_tc_pll_entry *e = &lkf_tc_pll_38400[i];
++
++		if (e->clock != crtc_state->port_clock)
++			continue;
++
++		memset(hw_state, 0, sizeof(*hw_state));
++		hw_state->mg_pll_div0 = e->div0;
++		hw_state->mg_pll_div1 = e->div1;
++		hw_state->mg_pll_lf = e->lf;
++		hw_state->mg_pll_frac_lock = e->frac_lock;
++		hw_state->mg_pll_ssc = e->ssc & ~LKF_TC_PLL_SSC_EN;
++		/* no BIAS/TDC programming on LKF: reuse the fields for 0x22c/0x130 */
++		hw_state->mg_pll_bias = e->r22c;
++		hw_state->mg_pll_bias_mask = ~0;
++		hw_state->mg_pll_tdc_coldst_bias = e->r130;
++		hw_state->mg_pll_tdc_coldst_bias_mask = ~0;
++		hw_state->mg_clktop2_hsclkctl = e->hsclkctl;
++		hw_state->mg_clktop2_coreclkctl1 = e->coreclkctl1;
++		return 0;
++	}
++
++	drm_dbg_kms(display->drm, "Lakefield: no TC PLL setting for %d kHz\n",
++		    crtc_state->port_clock);
++	return -EINVAL;
++}
++
++static void lkf_tc_pll_write(struct intel_display *display,
++			     struct intel_dpll *pll,
++			     const struct icl_dpll_hw_state *hw_state)
++{
++	enum tc_port tc_port = icl_pll_id_to_tc_port(pll->info->id);
++
++	/* same order as the Lakefield GOP */
++	intel_dkl_phy_write(display, LKF_TC_PLL_REG(tc_port, 0x2200), hw_state->mg_pll_div0);
++	intel_dkl_phy_write(display, LKF_TC_PLL_REG(tc_port, 0x2204), hw_state->mg_pll_div1);
++	intel_dkl_phy_write(display, LKF_TC_PLL_REG(tc_port, 0x2208), hw_state->mg_pll_lf);
++	intel_dkl_phy_write(display, LKF_TC_PLL_REG(tc_port, 0x220c), hw_state->mg_pll_frac_lock);
++	intel_dkl_phy_write(display, LKF_TC_PLL_REG(tc_port, 0x2210), hw_state->mg_pll_ssc);
++	intel_dkl_phy_write(display, LKF_TC_PLL_REG(tc_port, 0x222c), hw_state->mg_pll_bias);
++	intel_dkl_phy_write(display, LKF_TC_PLL_REG(tc_port, 0x2130),
++			    hw_state->mg_pll_tdc_coldst_bias);
++	intel_dkl_phy_write(display, LKF_TC_PLL_REG(tc_port, 0x20d4), hw_state->mg_clktop2_hsclkctl);
++	intel_dkl_phy_write(display, LKF_TC_PLL_REG(tc_port, 0x20d8),
++			    hw_state->mg_clktop2_coreclkctl1);
++	intel_dkl_phy_posting_read(display, LKF_TC_PLL_REG(tc_port, 0x20d8));
++}
++
++static bool lkf_tc_pll_get_hw_state(struct intel_display *display,
++				    struct intel_dpll *pll,
++				    struct intel_dpll_hw_state *dpll_hw_state)
++{
++	struct icl_dpll_hw_state *hw_state = &dpll_hw_state->icl;
++	enum tc_port tc_port = icl_pll_id_to_tc_port(pll->info->id);
++	intel_wakeref_t wakeref;
++	bool ret = false;
++
++	wakeref = intel_display_power_get_if_enabled(display, POWER_DOMAIN_DISPLAY_CORE);
++	if (!wakeref)
++		return false;
++
++	if (!(intel_de_read(display, intel_tc_pll_enable_reg(display, pll)) & PLL_ENABLE))
++		goto out;
++
++	hw_state->mg_pll_div0 = intel_dkl_phy_read(display, LKF_TC_PLL_REG(tc_port, 0x2200));
++	hw_state->mg_pll_div1 = intel_dkl_phy_read(display, LKF_TC_PLL_REG(tc_port, 0x2204));
++	hw_state->mg_pll_lf = intel_dkl_phy_read(display, LKF_TC_PLL_REG(tc_port, 0x2208));
++	hw_state->mg_pll_frac_lock = intel_dkl_phy_read(display, LKF_TC_PLL_REG(tc_port, 0x220c));
++	hw_state->mg_pll_ssc = intel_dkl_phy_read(display, LKF_TC_PLL_REG(tc_port, 0x2210));
++	hw_state->mg_pll_bias = intel_dkl_phy_read(display, LKF_TC_PLL_REG(tc_port, 0x222c));
++	hw_state->mg_pll_bias_mask = ~0;
++	hw_state->mg_pll_tdc_coldst_bias =
++		intel_dkl_phy_read(display, LKF_TC_PLL_REG(tc_port, 0x2130));
++	hw_state->mg_pll_tdc_coldst_bias_mask = ~0;
++	hw_state->mg_clktop2_hsclkctl =
++		intel_dkl_phy_read(display, LKF_TC_PLL_REG(tc_port, 0x20d4));
++	hw_state->mg_clktop2_coreclkctl1 =
++		intel_dkl_phy_read(display, LKF_TC_PLL_REG(tc_port, 0x20d8));
++	ret = true;
++out:
++	intel_display_power_put(display, POWER_DOMAIN_DISPLAY_CORE, wakeref);
++	return ret;
++}
++
++static int lkf_tc_pll_get_freq(struct intel_display *display,
++			       const struct intel_dpll *pll,
++			       const struct intel_dpll_hw_state *dpll_hw_state)
++{
++	const struct icl_dpll_hw_state *hw_state = &dpll_hw_state->icl;
++	int i;
++
++	for (i = 0; i < ARRAY_SIZE(lkf_tc_pll_38400); i++)
++		if (lkf_tc_pll_38400[i].div0 == hw_state->mg_pll_div0 &&
++		    lkf_tc_pll_38400[i].hsclkctl == hw_state->mg_clktop2_hsclkctl)
++			return lkf_tc_pll_38400[i].clock;
++
++	return 0;
++}
++
+ static int icl_calc_mg_pll_state(struct intel_crtc_state *crtc_state,
+ 				 struct intel_dpll_hw_state *dpll_hw_state)
+ {
+@@ -3020,6 +3156,9 @@ static int icl_calc_mg_pll_state(struct intel_crtc_state *crtc_state,
+ 	bool is_dkl = intel_display_has_dkl_phy(display);
+ 	int ret;
+ 
++	if (intel_display_lkf_tc(display))
++		return lkf_calc_tc_pll_state(crtc_state, dpll_hw_state);
++
+ 	ret = icl_mg_pll_find_divisors(clock, is_dp, use_ssc, &dco_khz,
+ 				       hw_state, is_dkl);
+ 	if (ret)
+@@ -4015,7 +4154,9 @@ static void mg_pll_enable(struct intel_display *display,
+ 
+ 	icl_pll_power_enable(display, pll, enable_reg);
+ 
+-	if (intel_display_has_dkl_phy(display))
++	if (intel_display_lkf_tc(display))
++		lkf_tc_pll_write(display, pll, hw_state);
++	else if (intel_display_has_dkl_phy(display))
+ 		dkl_pll_write(display, pll, hw_state);
+ 	else
+ 		icl_mg_pll_write(display, pll, hw_state);
+@@ -4237,14 +4378,21 @@ static const struct dpll_info rkl_plls[] = {
+ 	{}
+ };
+ 
+-/* Lakefield with Type-C: ICL combo PLLs, ICL TBT PLL, TC PLLs on the Dekel PHY */
++static const struct intel_dpll_funcs lkf_tc_pll_funcs = {
++	.enable = mg_pll_enable,
++	.disable = mg_pll_disable,
++	.get_hw_state = lkf_tc_pll_get_hw_state,
++	.get_freq = lkf_tc_pll_get_freq,
++};
++
++/* Lakefield with Type-C: ICL combo PLLs, ICL TBT PLL, TC PLLs behind the Dekel window */
+ static const struct dpll_info lkf_plls[] = {
+ 	{ .name = "DPLL 0", .funcs = &combo_pll_funcs, .id = DPLL_ID_ICL_DPLL0, },
+ 	{ .name = "DPLL 1", .funcs = &combo_pll_funcs, .id = DPLL_ID_ICL_DPLL1, },
+ 	{ .name = "TBT PLL", .funcs = &tbt_pll_funcs, .id = DPLL_ID_ICL_TBTPLL,
+ 	  .is_alt_port_dpll = true, },
+-	{ .name = "TC PLL 1", .funcs = &dkl_pll_funcs, .id = DPLL_ID_ICL_MGPLL1, },
+-	{ .name = "TC PLL 2", .funcs = &dkl_pll_funcs, .id = DPLL_ID_ICL_MGPLL2, },
++	{ .name = "TC PLL 1", .funcs = &lkf_tc_pll_funcs, .id = DPLL_ID_ICL_MGPLL1, },
++	{ .name = "TC PLL 2", .funcs = &lkf_tc_pll_funcs, .id = DPLL_ID_ICL_MGPLL2, },
+ 	{}
+ };
+ 
+-- 
+2.56.1
+

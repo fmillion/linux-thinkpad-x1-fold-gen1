@@ -1,7 +1,7 @@
 From 571f7cf441fd65db318f862fe2faa3ccf41f04fe Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 08:55:12 +0000
-Subject: [PATCH 29/30] Bluetooth: hci_intel: optional operational UART speed
+Subject: [PATCH 29/35] Bluetooth: hci_intel: optional operational UART speed
  for the CcP over serdev (experimental)
 
 The serdev path keeps the operational link at 115200 baud after the

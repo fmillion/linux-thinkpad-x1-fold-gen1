@@ -1,0 +1,40 @@
+From 794b5569f2ec0485f6b26dbf0fc56ed6ba8c964c Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 10:34:37 +0000
+Subject: [PATCH 35/35] drm/i915: Lakefield: report the absent PW_2 gate as on
+ with lkf_tc
+
+Run 4: link training passes and transcoder B runs (TRANSCONF B active, frame
+counter counting), but pipe B reads back as inactive and never raises a
+vblank: the transcoder/pipe B domains hang off PW_2, which never accepts a
+request on Lakefield, so its domains read as off - no pipe B state readout,
+and the pipe B IER is never programmed (0).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_display_power_well.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display_power_well.c b/drivers/gpu/drm/i915/display/intel_display_power_well.c
+index eda667374..2368ef38e 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_power_well.c
++++ b/drivers/gpu/drm/i915/display/intel_display_power_well.c
+@@ -632,6 +632,15 @@ static bool hsw_power_well_enabled(struct intel_display *display,
+ 		   HSW_PWR_WELL_CTL_STATE(pw_idx);
+ 	u32 val;
+ 
++	/*
++	 * Lakefield: PW_2 never accepts a request (see above), yet transcoders B/C
++	 * behind it run (pipe B drives the USB-C DP output). Report the absent
++	 * gate as on, or the transcoder/pipe B/C power domains read as off: no
++	 * pipe B/C state readout and no pipe B/C interrupt setup.
++	 */
++	if (id == SKL_DISP_PW_2 && intel_display_lkf_tc(display))
++		return true;
++
+ 	val = intel_de_read(display, regs->driver);
+ 
+ 	/*
+-- 
+2.56.1
+

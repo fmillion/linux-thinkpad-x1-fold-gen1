@@ -1,0 +1,199 @@
+From 8049e261d11758305a5d1f1b2f191d9c1e0924cf Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 10:26:00 +0000
+Subject: [PATCH 34/35] drm/i915: Lakefield: TGL-style transcoder/DDI interface
+ with i915.lkf_tc
+
+Run 3: the TC PLL now locks, but link training reads the per-port DP_TP_CTL
+(0x64340 for DDI D), which is unclaimed on Lakefield; DDI_BUF never goes
+active and training fails.
+
+The Lakefield GOP uses the TGL layout throughout: the per-transcoder DP_TP_CTL
+(0x60540/0x61540/0x62540, never 0x64x40), TRANS_CLK_SEL as (port + 1) << 28
+(cleared with 0x0fffffff) and the TRANS_DDI_FUNC_CTL port select in bits 31:27
+(cleared with 0x07ffffff).
+
+Add intel_display_tgl_trans() (display version 12+, or Lakefield with lkf_tc)
+and use it for the TRANS_DDI_FUNC_CTL/TRANS_CLK_SEL encodings, DP_TP_CTL/STATUS
+selection, the TGL DP pre-enable order (transcoder function configured before
+link training) and the TGL transcoder-clock disable order.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_ddi.c      | 30 +++++++++----------
+ .../drm/i915/display/intel_display_device.c   | 10 +++++++
+ .../drm/i915/display/intel_display_device.h   |  1 +
+ 3 files changed, 26 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_ddi.c b/drivers/gpu/drm/i915/display/intel_ddi.c
+index 2320c1688..91cd0d124 100644
+--- a/drivers/gpu/drm/i915/display/intel_ddi.c
++++ b/drivers/gpu/drm/i915/display/intel_ddi.c
+@@ -518,7 +518,7 @@ intel_ddi_transcoder_func_reg_val_get(struct intel_encoder *encoder,
+ 
+ 	/* Enable TRANS_DDI_FUNC_CTL for the pipe to work in HDMI mode */
+ 	temp = TRANS_DDI_FUNC_ENABLE;
+-	if (DISPLAY_VER(display) >= 12)
++	if (intel_display_tgl_trans(display))
+ 		temp |= TGL_TRANS_DDI_SELECT_PORT(port);
+ 	else
+ 		temp |= TRANS_DDI_SELECT_PORT(port);
+@@ -593,7 +593,7 @@ intel_ddi_transcoder_func_reg_val_get(struct intel_encoder *encoder,
+ 			temp |= TRANS_DDI_MODE_SELECT_DP_MST;
+ 		temp |= DDI_PORT_WIDTH(crtc_state->lane_count);
+ 
+-		if (DISPLAY_VER(display) >= 12) {
++		if (intel_display_tgl_trans(display)) {
+ 			enum transcoder master;
+ 
+ 			master = crtc_state->mst_master_transcoder;
+@@ -697,7 +697,7 @@ void intel_ddi_disable_transcoder_func(const struct intel_crtc_state *crtc_state
+ 		ctl &= ~(TRANS_DDI_PORT_SYNC_ENABLE |
+ 			 TRANS_DDI_PORT_SYNC_MASTER_SELECT_MASK);
+ 
+-	if (DISPLAY_VER(display) >= 12) {
++	if (intel_display_tgl_trans(display)) {
+ 		if (!intel_dp_mst_is_master_trans(crtc_state)) {
+ 			ctl &= ~(TGL_TRANS_DDI_PORT_MASK |
+ 				 TRANS_DDI_MODE_SELECT_MASK);
+@@ -852,7 +852,7 @@ static void intel_ddi_get_encoder_pipes(struct intel_encoder *encoder,
+ 		if (!trans_wakeref)
+ 			continue;
+ 
+-		if (DISPLAY_VER(display) >= 12) {
++		if (intel_display_tgl_trans(display)) {
+ 			port_mask = TGL_TRANS_DDI_PORT_MASK;
+ 			ddi_select = TGL_TRANS_DDI_SELECT_PORT(port);
+ 		} else {
+@@ -1047,7 +1047,7 @@ void intel_ddi_enable_transcoder_clock(struct intel_encoder *encoder,
+ 
+ 	if (DISPLAY_VER(display) >= 13)
+ 		val = TGL_TRANS_CLK_SEL_PORT(phy);
+-	else if (DISPLAY_VER(display) >= 12)
++	else if (intel_display_tgl_trans(display))
+ 		val = TGL_TRANS_CLK_SEL_PORT(encoder->port);
+ 	else
+ 		val = TRANS_CLK_SEL_PORT(encoder->port);
+@@ -1064,7 +1064,7 @@ void intel_ddi_disable_transcoder_clock(const struct intel_crtc_state *crtc_stat
+ 	if (cpu_transcoder == TRANSCODER_EDP)
+ 		return;
+ 
+-	if (DISPLAY_VER(display) >= 12)
++	if (intel_display_tgl_trans(display))
+ 		val = TGL_TRANS_CLK_SEL_DISABLED;
+ 	else
+ 		val = TRANS_CLK_SEL_DISABLED;
+@@ -2272,7 +2272,7 @@ i915_reg_t dp_tp_ctl_reg(struct intel_encoder *encoder,
+ {
+ 	struct intel_display *display = to_intel_display(encoder);
+ 
+-	if (DISPLAY_VER(display) >= 12)
++	if (intel_display_tgl_trans(display))
+ 		return TGL_DP_TP_CTL(display,
+ 				     tgl_dp_tp_transcoder(crtc_state));
+ 	else
+@@ -2284,7 +2284,7 @@ static i915_reg_t dp_tp_status_reg(struct intel_encoder *encoder,
+ {
+ 	struct intel_display *display = to_intel_display(encoder);
+ 
+-	if (DISPLAY_VER(display) >= 12)
++	if (intel_display_tgl_trans(display))
+ 		return TGL_DP_TP_STATUS(display,
+ 					tgl_dp_tp_transcoder(crtc_state));
+ 	else
+@@ -2967,7 +2967,7 @@ static void intel_ddi_pre_enable_dp(struct intel_atomic_state *state,
+ 
+ 	if (DISPLAY_VER(display) >= 14)
+ 		mtl_ddi_pre_enable_dp(state, encoder, crtc_state, conn_state);
+-	else if (DISPLAY_VER(display) >= 12)
++	else if (intel_display_tgl_trans(display))
+ 		tgl_ddi_pre_enable_dp(state, encoder, crtc_state, conn_state);
+ 	else
+ 		hsw_ddi_pre_enable_dp(state, encoder, crtc_state, conn_state);
+@@ -3144,7 +3144,7 @@ static void intel_ddi_post_disable_dp(struct intel_atomic_state *state,
+ 	 */
+ 	intel_dp_set_power(intel_dp, DP_SET_POWER_D3);
+ 
+-	if (DISPLAY_VER(display) >= 12) {
++	if (intel_display_tgl_trans(display)) {
+ 		if (is_mst || intel_dp_is_uhbr(old_crtc_state)) {
+ 			enum transcoder cpu_transcoder = old_crtc_state->cpu_transcoder;
+ 
+@@ -3169,7 +3169,7 @@ static void intel_ddi_post_disable_dp(struct intel_atomic_state *state,
+ 	 * Configure Transcoder Clock select to direct no clock to the
+ 	 * transcoder"
+ 	 */
+-	if (DISPLAY_VER(display) >= 12)
++	if (intel_display_tgl_trans(display))
+ 		intel_ddi_disable_transcoder_clock(old_crtc_state);
+ 
+ 	intel_pps_vdd_on(intel_dp);
+@@ -3203,12 +3203,12 @@ static void intel_ddi_post_disable_hdmi(struct intel_atomic_state *state,
+ 	dig_port->set_infoframes(encoder, false,
+ 				 old_crtc_state, old_conn_state);
+ 
+-	if (DISPLAY_VER(display) < 12)
++	if (!intel_display_tgl_trans(display))
+ 		intel_ddi_disable_transcoder_clock(old_crtc_state);
+ 
+ 	intel_ddi_buf_disable(encoder, old_crtc_state);
+ 
+-	if (DISPLAY_VER(display) >= 12)
++	if (intel_display_tgl_trans(display))
+ 		intel_ddi_disable_transcoder_clock(old_crtc_state);
+ 
+ 	wakeref = fetch_and_zero(&dig_port->ddi_io_wakeref);
+@@ -4050,7 +4050,7 @@ static void intel_ddi_read_func_ctl_dp_sst(struct intel_encoder *encoder,
+ 	crtc_state->lane_count =
+ 		((ddi_func_ctl & DDI_PORT_WIDTH_MASK) >> DDI_PORT_WIDTH_SHIFT) + 1;
+ 
+-	if (DISPLAY_VER(display) >= 12 &&
++	if (intel_display_tgl_trans(display) &&
+ 	    (ddi_func_ctl & TRANS_DDI_MODE_SELECT_MASK) == TRANS_DDI_MODE_SELECT_FDI_OR_128B132B)
+ 		crtc_state->mst_master_transcoder =
+ 			REG_FIELD_GET(TRANS_DDI_MST_TRANSPORT_SELECT_MASK, ddi_func_ctl);
+@@ -4087,7 +4087,7 @@ static void intel_ddi_read_func_ctl_dp_mst(struct intel_encoder *encoder,
+ 	crtc_state->lane_count =
+ 		((ddi_func_ctl & DDI_PORT_WIDTH_MASK) >> DDI_PORT_WIDTH_SHIFT) + 1;
+ 
+-	if (DISPLAY_VER(display) >= 12)
++	if (intel_display_tgl_trans(display))
+ 		crtc_state->mst_master_transcoder =
+ 			REG_FIELD_GET(TRANS_DDI_MST_TRANSPORT_SELECT_MASK, ddi_func_ctl);
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_display_device.c b/drivers/gpu/drm/i915/display/intel_display_device.c
+index 208f29e0e..675cb4f7c 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_device.c
++++ b/drivers/gpu/drm/i915/display/intel_display_device.c
+@@ -1697,6 +1697,16 @@ bool intel_display_has_dkl_phy(struct intel_display *display)
+ 	return IS_DISPLAY_VER(display, 12, 13) || intel_display_lkf_tc(display);
+ }
+ 
++/*
++ * TGL-style transcoder/DDI interface: TRANS_DDI_FUNC_CTL/TRANS_CLK_SEL port
++ * encodings and per-transcoder DP_TP_CTL/STATUS. Lakefield has these too (the
++ * GOP never touches the per-port DP_TP_CTL, which is unclaimed).
++ */
++bool intel_display_tgl_trans(struct intel_display *display)
++{
++	return DISPLAY_VER(display) >= 12 || intel_display_lkf_tc(display);
++}
++
+ static bool lkf_display_enabled(struct intel_display *display)
+ {
+ 	if (display->params.lkf_display >= 0)
+diff --git a/drivers/gpu/drm/i915/display/intel_display_device.h b/drivers/gpu/drm/i915/display/intel_display_device.h
+index f90ff2005..c8f6e6e2a 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_device.h
++++ b/drivers/gpu/drm/i915/display/intel_display_device.h
+@@ -313,6 +313,7 @@ bool intel_display_device_present(struct intel_display *display);
+ bool intel_display_device_enabled(struct intel_display *display);
+ bool intel_display_lkf_tc(struct intel_display *display);
+ bool intel_display_has_dkl_phy(struct intel_display *display);
++bool intel_display_tgl_trans(struct intel_display *display);
+ struct intel_display *intel_display_device_probe(struct pci_dev *pdev);
+ void intel_display_device_remove(struct intel_display *display);
+ void intel_display_device_info_runtime_init(struct intel_display *display);
+-- 
+2.56.1
+

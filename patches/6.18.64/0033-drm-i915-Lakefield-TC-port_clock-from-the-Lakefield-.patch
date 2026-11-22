@@ -1,0 +1,37 @@
+From 894dd4caff645cd0a72130046d242650373f0aaa Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 10:10:41 +0000
+Subject: [PATCH 33/35] drm/i915: Lakefield: TC port_clock from the Lakefield
+ PLL table
+
+icl_compute_tc_phy_dplls() decodes port_clock with the ICL MG decoder
+directly, which gives 0 for the Lakefield table values; the zero pixel
+rate then oopses (divide error) in hsw_compute_linetime_wm().
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_dpll_mgr.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dpll_mgr.c b/drivers/gpu/drm/i915/display/intel_dpll_mgr.c
+index 689afe865..b0ab10321 100644
+--- a/drivers/gpu/drm/i915/display/intel_dpll_mgr.c
++++ b/drivers/gpu/drm/i915/display/intel_dpll_mgr.c
+@@ -3581,8 +3581,12 @@ static int icl_compute_tc_phy_dplls(struct intel_atomic_state *state,
+ 	else
+ 		icl_set_active_port_dpll(crtc_state, ICL_PORT_DPLL_MG_PHY);
+ 
+-	crtc_state->port_clock = icl_ddi_mg_pll_get_freq(display, NULL,
+-							 &port_dpll->hw_state);
++	if (intel_display_lkf_tc(display))
++		crtc_state->port_clock = lkf_tc_pll_get_freq(display, NULL,
++							     &port_dpll->hw_state);
++	else
++		crtc_state->port_clock = icl_ddi_mg_pll_get_freq(display, NULL,
++								 &port_dpll->hw_state);
+ 
+ 	return 0;
+ }
+-- 
+2.56.1
+
