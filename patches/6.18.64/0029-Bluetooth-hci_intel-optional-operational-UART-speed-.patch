@@ -1,0 +1,54 @@
+From 571f7cf441fd65db318f862fe2faa3ccf41f04fe Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 08:55:12 +0000
+Subject: [PATCH 29/29] Bluetooth: hci_intel: optional operational UART speed
+ for the CcP over serdev (experimental)
+
+The serdev path keeps the operational link at 115200 baud after the
+firmware download. Add hci_uart.intel_ccp_speed to switch the running
+operational firmware to a higher rate after setup. Default 0 (stay at
+115200): on the ThinkPad X1 Fold Gen 1 the operational firmware does not
+follow Intel Set UART Baudrate to 921600 or 3000000 the way the
+bootloader does (host and controller end up at different rates).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/bluetooth/hci_intel.c | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/drivers/bluetooth/hci_intel.c b/drivers/bluetooth/hci_intel.c
+index e85490cb8..a71baeb21 100644
+--- a/drivers/bluetooth/hci_intel.c
++++ b/drivers/bluetooth/hci_intel.c
+@@ -41,6 +41,11 @@
+  */
+ #define INTEL_CCP_DOWNLOAD_SPEED	921600
+ 
++static unsigned int intel_ccp_speed;	/* 0: stay at 115200 (operational speed change not working yet) */
++module_param(intel_ccp_speed, uint, 0444);
++MODULE_PARM_DESC(intel_ccp_speed,
++		 "Operational UART speed for the Intel CcP serdev controller (0 = stay at 115200)");
++
+ #define HCI_LPM_WAKE_PKT 0xf0
+ #define HCI_LPM_PKT 0xf1
+ #define HCI_LPM_MAX_SIZE 10
+@@ -904,6 +909,16 @@ static int intel_setup(struct hci_uart *hu)
+ 		err = intel_set_baudrate(hu, oper_speed);
+ 		if (err)
+ 			return err;
++	} else if (hu->serdev && intel_ccp_speed && intel_ccp_speed != init_speed) {
++		/*
++		 * CcP over serdev: the operational firmware is now running, so
++		 * leave 115200 baud behind. At 115200 a busy LE scan saturates
++		 * the link: the controller drops advertising reports and HCI
++		 * commands queue up behind events until they time out.
++		 */
++		err = intel_set_baudrate(hu, intel_ccp_speed);
++		if (err)
++			return err;
+ 	}
+ 
+ 	bt_dev_info(hdev, "Setup complete");
+-- 
+2.56.1
+
