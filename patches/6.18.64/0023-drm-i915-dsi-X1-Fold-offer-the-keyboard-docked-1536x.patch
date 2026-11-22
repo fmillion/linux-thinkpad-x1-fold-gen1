@@ -1,0 +1,178 @@
+From d8a7940baabdf94024513ffbc6c336eb02efbf28 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 08:05:02 +0000
+Subject: [PATCH 23/23] drm/i915/dsi: X1 Fold: offer the keyboard-docked
+ 1536x1006 mode, scanned out above the keyboard
+
+With the magnetic keyboard on the lower half of the ThinkPad X1 Fold's
+folding panel, only the 1536x1006 region above it is visible (firmware
+GDSZ occlusion rectangle; the VBT carries a matching OEM mode). Offer
+this mode on the DSI connector, with the panel's timings and refresh
+rate, and have the panel fitter scan it out 1:1 against the logical top
+edge (the raw bottom, as the panel is mounted upside down) instead of
+centring or stretching it. Explicit full-screen scaling still stretches.
+
+This lets userspace switch to the docked layout with a normal modeset.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_dsi.c  | 66 ++++++++++++++++++++++-
+ drivers/gpu/drm/i915/display/intel_dsi.h  |  2 +
+ drivers/gpu/drm/i915/display/intel_pfit.c | 23 ++++++++
+ 3 files changed, 90 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dsi.c b/drivers/gpu/drm/i915/display/intel_dsi.c
+index a8f012119..74c360551 100644
+--- a/drivers/gpu/drm/i915/display/intel_dsi.c
++++ b/drivers/gpu/drm/i915/display/intel_dsi.c
+@@ -10,6 +10,45 @@
+ #include "intel_dsi.h"
+ #include "intel_panel.h"
+ 
++#include <linux/dmi.h>
++
++/*
++ * Lenovo ThinkPad X1 Fold Gen 1: when the magnetic keyboard rests on the lower
++ * half of the folding panel the usable area is the 1536x1006 region above it
++ * (the firmware's GDSZ occlusion rectangle starts at row 1006; the VBT carries
++ * a 1536x1006 OEM mode for it). Offer it as a mode, scanned out 1:1 against the
++ * logical top edge with the pipe scaler instead of being centred or stretched.
++ */
++#define X1FOLD_PANEL_W	1536
++#define X1FOLD_PANEL_H	2048
++#define X1FOLD_DOCKED_H	1006
++
++static const struct dmi_system_id x1fold_dmi[] = {
++	{
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
++			DMI_MATCH(DMI_PRODUCT_FAMILY, "ThinkPad X1 Fold Gen 1"),
++		},
++	},
++	{ }
++};
++
++static bool x1fold_panel(struct intel_connector *connector)
++{
++	const struct drm_display_mode *fixed =
++		intel_panel_preferred_fixed_mode(connector);
++
++	return fixed && fixed->hdisplay == X1FOLD_PANEL_W &&
++		fixed->vdisplay == X1FOLD_PANEL_H && dmi_check_system(x1fold_dmi);
++}
++
++bool intel_dsi_is_docked_mode(struct intel_connector *connector,
++			      int hdisplay, int vdisplay)
++{
++	return hdisplay == X1FOLD_PANEL_W && vdisplay == X1FOLD_DOCKED_H &&
++		x1fold_panel(connector);
++}
++
+ void intel_dsi_wait_panel_power_cycle(struct intel_dsi *intel_dsi)
+ {
+ 	ktime_t panel_power_on_time;
+@@ -55,7 +94,28 @@ int intel_dsi_tlpx_ns(const struct intel_dsi *intel_dsi)
+ 
+ int intel_dsi_get_modes(struct drm_connector *connector)
+ {
+-	return intel_panel_get_modes(to_intel_connector(connector));
++	struct intel_connector *intel_connector = to_intel_connector(connector);
++	const struct drm_display_mode *fixed;
++	struct drm_display_mode *mode;
++	int count;
++
++	count = intel_panel_get_modes(intel_connector);
++
++	if (!x1fold_panel(intel_connector))
++		return count;
++
++	/* Same timings as the panel (so the same refresh rate), shorter active area */
++	fixed = intel_panel_preferred_fixed_mode(intel_connector);
++	mode = drm_mode_duplicate(connector->dev, fixed);
++	if (!mode)
++		return count;
++
++	mode->vdisplay = X1FOLD_DOCKED_H;
++	mode->type = DRM_MODE_TYPE_DRIVER;
++	drm_mode_set_name(mode);
++	drm_mode_probed_add(connector, mode);
++
++	return count + 1;
+ }
+ 
+ enum drm_mode_status intel_dsi_mode_valid(struct drm_connector *connector,
+@@ -70,6 +130,10 @@ enum drm_mode_status intel_dsi_mode_valid(struct drm_connector *connector,
+ 
+ 	drm_dbg_kms(display->drm, "\n");
+ 
++	if (intel_dsi_is_docked_mode(intel_connector, mode->hdisplay, mode->vdisplay) &&
++	    drm_mode_vrefresh(mode) == drm_mode_vrefresh(fixed_mode))
++		return intel_mode_valid_max_plane_size(display, mode, 1);
++
+ 	status = intel_panel_mode_valid(intel_connector, mode);
+ 	if (status != MODE_OK)
+ 		return status;
+diff --git a/drivers/gpu/drm/i915/display/intel_dsi.h b/drivers/gpu/drm/i915/display/intel_dsi.h
+index 89c7166a3..d781f5d3b 100644
+--- a/drivers/gpu/drm/i915/display/intel_dsi.h
++++ b/drivers/gpu/drm/i915/display/intel_dsi.h
+@@ -164,6 +164,8 @@ int intel_dsi_tlpx_ns(const struct intel_dsi *intel_dsi);
+ enum drm_panel_orientation
+ intel_dsi_get_panel_orientation(struct intel_connector *connector);
+ int intel_dsi_get_modes(struct drm_connector *connector);
++bool intel_dsi_is_docked_mode(struct intel_connector *connector,
++			      int hdisplay, int vdisplay);
+ enum drm_mode_status intel_dsi_mode_valid(struct drm_connector *connector,
+ 					  const struct drm_display_mode *mode);
+ struct intel_dsi_host *intel_dsi_host_init(struct intel_dsi *intel_dsi,
+diff --git a/drivers/gpu/drm/i915/display/intel_pfit.c b/drivers/gpu/drm/i915/display/intel_pfit.c
+index 68539e7c2..defae4dac 100644
+--- a/drivers/gpu/drm/i915/display/intel_pfit.c
++++ b/drivers/gpu/drm/i915/display/intel_pfit.c
+@@ -11,6 +11,7 @@
+ #include "intel_display_driver.h"
+ #include "intel_display_regs.h"
+ #include "intel_display_types.h"
++#include "intel_dsi.h"
+ #include "intel_lvds_regs.h"
+ #include "intel_pfit.h"
+ #include "intel_pfit_regs.h"
+@@ -198,6 +199,27 @@ static int pch_panel_fitting(struct intel_crtc_state *crtc_state,
+ 	    crtc_state->output_format != INTEL_OUTPUT_FORMAT_YCBCR420)
+ 		return 0;
+ 
++	/*
++	 * X1 Fold docked mode: 1:1 against the edge that is the logical top
++	 * (the panel is mounted upside down, i.e. the raw bottom), so the
++	 * picture sits above the keyboard. Explicit full-screen scaling still
++	 * stretches.
++	 */
++	if (conn_state->scaling_mode != DRM_MODE_SCALE_FULLSCREEN &&
++	    conn_state->connector->connector_type == DRM_MODE_CONNECTOR_DSI &&
++	    intel_dsi_is_docked_mode(to_intel_connector(conn_state->connector),
++				     pipe_src_w, pipe_src_h)) {
++		width = pipe_src_w;
++		height = pipe_src_h;
++		x = (adjusted_mode->crtc_hdisplay - width) / 2;
++		if (conn_state->connector->display_info.panel_orientation ==
++		    DRM_MODE_PANEL_ORIENTATION_BOTTOM_UP)
++			y = adjusted_mode->crtc_vdisplay - height;
++		else
++			y = 0;
++		goto set_window;
++	}
++
+ 	switch (conn_state->scaling_mode) {
+ 	case DRM_MODE_SCALE_CENTER:
+ 		width = pipe_src_w;
+@@ -249,6 +271,7 @@ static int pch_panel_fitting(struct intel_crtc_state *crtc_state,
+ 		return -EINVAL;
+ 	}
+ 
++set_window:
+ 	drm_rect_init(&crtc_state->pch_pfit.dst,
+ 		      x, y, width, height);
+ 	crtc_state->pch_pfit.enabled = true;
+-- 
+2.56.1
+
