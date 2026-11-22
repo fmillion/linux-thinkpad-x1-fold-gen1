@@ -20,8 +20,9 @@ i915 GuC/HuC/DMC, later audio/BT)**, a network service and `sshd` enabled.
    ```
 4. `depmod 6.18.64-fold`; `mkinitcpio -p linux-fold`. (With the `kms` hook, our i915 is in the
    initramfs — fine, render-only mode is safe early.)
-5. `grub-mkconfig -o /boot/grub/grub.cfg` (10_linux picks up `vmlinuz-linux-fold`; keep
-   `linux-lts` as fallback).
+5. Make it the default: add `GRUB_TOP_LEVEL="/boot/vmlinuz-linux-fold"` to `/etc/default/grub`
+   (GRUB ≥ 2.12; with `GRUB_DEFAULT=0` the top-level "Arch Linux" entry then boots it; `linux-lts`
+   stays under "Advanced options"), then `grub-mkconfig -o /boot/grub/grub.cfg`.
 
 ## Userspace (`userspace/`)
 - `udev/60-thinkpad-x1-fold.rules` → `/etc/udev/rules.d/`
