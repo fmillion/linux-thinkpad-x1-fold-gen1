@@ -1,7 +1,7 @@
 From 4c7e3a0af4141f6f2f77f605c824369ae85373df Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 01:15:21 +0000
-Subject: [PATCH 03/23] HID: intel-ish-hid: ipc: Add Lakefield PCI device ID
+Subject: [PATCH 03/28] HID: intel-ish-hid: ipc: Add Lakefield PCI device ID
 
 Add the PCI ID of the Integrated Sensor Hub found on Intel Lakefield
 (e.g. Lenovo ThinkPad X1 Fold Gen 1, Samsung Galaxy Book S).

@@ -31,6 +31,9 @@ i915 GuC/HuC/DMC, later audio/BT)**, a network service and `sshd` enabled.
 7. Audio firmware: mount the machine's Windows partition read-only and run
    `tools/extract-sst-firmware.sh <mountpoint>` (installs to `updates/intel/avs/lkf/`).
 
+8. Bluetooth: `hci_uart` from the patched tree is part of the kernel build (patches 0024–0028);
+   install `bluez bluez-utils`, `systemctl enable bluetooth`.
+
 ## Userspace (`userspace/`)
 - `udev/60-thinkpad-x1-fold.rules` → `/etc/udev/rules.d/`
 - `modprobe.d/thinkpad-x1-fold-i915.conf` → `/etc/modprobe.d/`

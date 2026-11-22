@@ -1,0 +1,56 @@
+From dbed921fd052d2cd41d33fa5778e10b7d50e7006 Mon Sep 17 00:00:00 2001
+From: Cai Yu <caiyu7372@gmail.com>
+Date: Sat, 26 Sep 2026 07:40:41 +0800
+Subject: [PATCH 25/28] Bluetooth: hci_intel: add the CcP controller (hardware
+ variant 0x14)
+
+The Intel CcP controller (hardware variant 0x14) is used on the
+Lakefield and Jasper Lake platforms.  btintel_get_fw_name() in btintel.c
+already knows it and builds the same three-part firmware name as for
+ThP/JfP/HcP (intel/ibt-<hw_variant>-<hw_revision>-<fw_revision>), but
+hci_intel.c duplicates that lookup and rejects the variant before the
+firmware is requested:
+
+  Bluetooth: hci0: Unsupported Intel hardware variant (20)
+
+Add 0x14 to the variant check and to both firmware name switches.
+
+Tested on a Lenovo ThinkPad X1 Fold Gen1 (Lakefield, ACPI INT33E4):
+intel/ibt-20-1-3.sfi is requested and the DDC parameters are applied.
+
+Signed-off-by: Cai Yu <caiyu7372@gmail.com>
+---
+ drivers/bluetooth/hci_intel.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/bluetooth/hci_intel.c b/drivers/bluetooth/hci_intel.c
+index 5d4c409d0..b2c8dddd4 100644
+--- a/drivers/bluetooth/hci_intel.c
++++ b/drivers/bluetooth/hci_intel.c
+@@ -610,6 +610,7 @@ static int intel_setup(struct hci_uart *hu)
+ 	case 0x0b:	/* LnP */
+ 	case 0x0c:	/* WsP */
+ 	case 0x12:	/* ThP */
++	case 0x14:	/* CcP */
+ 		break;
+ 	default:
+ 		bt_dev_err(hdev, "Unsupported Intel hardware variant (%u)",
+@@ -699,6 +700,7 @@ static int intel_setup(struct hci_uart *hu)
+ 			 ver.hw_variant, le16_to_cpu(params.dev_revid));
+ 		break;
+ 	case 0x12:      /* ThP */
++	case 0x14:      /* CcP */
+ 		snprintf(fwname, sizeof(fwname), "intel/ibt-%u-%u-%u.sfi",
+ 			 ver.hw_variant, ver.hw_revision, ver.fw_revision);
+ 		break;
+@@ -725,6 +727,7 @@ static int intel_setup(struct hci_uart *hu)
+ 			 ver.hw_variant, le16_to_cpu(params.dev_revid));
+ 		break;
+ 	case 0x12:      /* ThP */
++	case 0x14:      /* CcP */
+ 		snprintf(fwname, sizeof(fwname), "intel/ibt-%u-%u-%u.ddc",
+ 			 ver.hw_variant, ver.hw_revision, ver.fw_revision);
+ 		break;
+-- 
+2.56.1
+

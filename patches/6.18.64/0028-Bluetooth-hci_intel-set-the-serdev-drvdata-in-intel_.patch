@@ -1,0 +1,35 @@
+From efc837c608beb1473080279ea318eb1f233da813 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 08:31:51 +0000
+Subject: [PATCH 28/28] Bluetooth: hci_intel: set the serdev drvdata in
+ intel_serdev_probe()
+
+hci_serdev.c finds the hci_uart through the serdev drvdata. Without it
+all received data is dropped (WARN in hci_uart_receive_buf() /
+hci_uart_write_wakeup()) and setup fails with "Reading Intel version
+information failed (-110)".
+
+Found by the Samsung Galaxy Book S (Lakefield) work,
+github.com/franke7777/galaxy-book-s-linux (dkms/books-bt).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/bluetooth/hci_intel.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/bluetooth/hci_intel.c b/drivers/bluetooth/hci_intel.c
+index 44a970e63..e85490cb8 100644
+--- a/drivers/bluetooth/hci_intel.c
++++ b/drivers/bluetooth/hci_intel.c
+@@ -1320,6 +1320,8 @@ static int intel_serdev_probe(struct serdev_device *serdev)
+ 		return -ENOMEM;
+ 
+ 	hu->serdev = serdev;
++	/* hci_serdev.c looks the hci_uart up through the drvdata */
++	serdev_device_set_drvdata(serdev, hu);
+ 
+ 	/* The port is not open yet (hci_uart_register_device() opens it), so
+ 	 * only the ACPI properties and the reset GPIO can be used here.
+-- 
+2.56.1
+
