@@ -348,3 +348,7 @@ display descriptor → display init skipped), keep simpledrm scanning out the BO
   framemd5). No GPU hangs/resets.
 - Interim install: i915 in `updates/` + `/etc/modprobe.d/fold-i915-manual.conf` (blacklist; loaded
   manually) while testing.
+- **KDE Plasma 6.8.3 Wayland**: with `KWIN_DRM_DEVICES=<i915 card>:<simpledrm card>` KWin composites
+  with **OpenGL ES 3.2 on "Mesa Intel(R) UHD Graphics (JSL)"** (holds renderD128 + card0), atomic
+  modesetting on the simpledrm output. User report: desktop correct, responsive scrolling/browsing.
+  Persistent setup in `userspace/` (modprobe option, sysfs-ID unit, Plasma env script).

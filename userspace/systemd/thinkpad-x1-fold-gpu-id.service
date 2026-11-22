@@ -1,0 +1,19 @@
+# Mesa (as of 26.3) refuses PCI ID 0x9840 ("Driver does not support the 0x9840 PCI ID").
+# libdrm reads the ID from sysfs, so present the Elkhart/Jasper Lake ID 0x4e71 there.
+# Interim workaround until Mesa carries the Lakefield ID; remove once it does.
+[Unit]
+Description=ThinkPad X1 Fold: present a Mesa-known PCI ID for the Lakefield GPU
+DefaultDependencies=no
+After=systemd-udev-settle.service systemd-modules-load.service
+Before=display-manager.service systemd-user-sessions.service
+ConditionPathExists=/sys/bus/pci/devices/0000:00:02.0/device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecCondition=/bin/sh -c 'grep -qx 0x9840 /sys/bus/pci/devices/0000:00:02.0/device'
+ExecStart=/bin/sh -c 'echo 0x4e71 > /run/thinkpad-x1-fold-gpu-id && mount --bind /run/thinkpad-x1-fold-gpu-id /sys/bus/pci/devices/0000:00:02.0/device'
+ExecStop=/bin/umount /sys/bus/pci/devices/0000:00:02.0/device
+
+[Install]
+WantedBy=multi-user.target
