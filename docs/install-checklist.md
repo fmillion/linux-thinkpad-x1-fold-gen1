@@ -24,6 +24,10 @@ i915 GuC/HuC/DMC, later audio/BT)**, a network service and `sshd` enabled.
    (GRUB ≥ 2.12; with `GRUB_DEFAULT=0` the top-level "Arch Linux" entry then boots it; `linux-lts`
    stays under "Advanced options"), then `grub-mkconfig -o /boot/grub/grub.cfg`.
 
+6. Touch: build ithc against the kernel tree and install it to `updates/`:
+   `tools/build-ithc.sh <kernel-tree> <ithc-checkout> <stage>`; copy `updates/ithc.ko*`; `depmod`.
+   Needs patch 0022 in the kernel image (otherwise only `options ithc poll` works).
+
 ## Userspace (`userspace/`)
 - `udev/60-thinkpad-x1-fold.rules` → `/etc/udev/rules.d/`
 - `modprobe.d/thinkpad-x1-fold-i915.conf` → `/etc/modprobe.d/`

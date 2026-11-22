@@ -34,5 +34,5 @@ graphical sits on **i915 Lakefield + DSI**.
 AVS driver on `98C8` with LKF base FW, ALC287 (17aa:22c6) codec quirks, DMIC via NHLT, UCM.
 
 ## Phase 5 — The rest
-BT (`hci_intel` serdev series), touch/pen (`ithc`), S0ix (`intel_pmc_core`/`intel_idle` LKF),
+BT (`hci_intel` serdev series), touch (`ithc` + patch 0022 — DONE, pen untested), S0ix (`intel_pmc_core`/`intel_idle` LKF),
 KDE integration (dock → mode switch + rotation lock; undock → full panel + auto-rotate).

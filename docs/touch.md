@@ -16,3 +16,5 @@
   touch on top of this (calibration fixes only the physical mount).
 - Verified (polling mode, 2026-11-22): tap, drag, one-finger scroll, pinch-zoom. Pen untested
   (no pen available).
+- **With patch 0022: IRQ mode works** — ithc autoloads, `IR-PCI-MSI-0000:00:11.0` interrupt
+  counting, same touch behaviour, no warnings. No `ithc` module options needed.
