@@ -1,0 +1,38 @@
+# Maintainer: fmillion <47171880+fmillion@users.noreply.github.com>
+# Intel SST (AVS) DSP base firmware for the ThinkPad X1 Fold Gen 1 (Lakefield), extracted from
+# Lenovo's public Windows audio driver package for this machine. The firmware is Intel's and is
+# not redistributed by this project: build this package on the target machine (do not host the
+# built package).
+
+pkgname=x1fold-sst-firmware
+pkgver=10.28.0.5995
+pkgrel=1
+pkgdesc='Intel SST DSP firmware for the ThinkPad X1 Fold Gen 1 (from the Lenovo driver package)'
+arch=(any)
+url='https://pcsupport.lenovo.com/products/laptops-and-netbooks/thinkpad-x-series-laptops/thinkpad-x1-fold-gen-1-type-20rk-20rl/downloads'
+license=(LicenseRef-Intel-proprietary)
+makedepends=(innoextract python)
+_pkg=n2pa115w   # "Realtek Audio Driver" 6.0.9225.1 (2025-07-09), contains Intel SST 10.28.00.6539
+source=("https://download.lenovo.com/pccbbs/mobiles/$_pkg.exe")
+noextract=("$_pkg.exe")
+sha256sums=('d266d6c712238d5fa90ce0f95d3d15d080ee9d92a2c9e63591995a399e722165')
+
+_fw='code$GetExtractPath$/IntelHDASST/Fw/dsp_fw_release.bin'
+
+prepare() {
+  rm -rf extract
+  innoextract -s -d extract -I "$_fw" "$_pkg.exe"
+  # check that this really is the expected firmware build
+  python3 -I - "extract/$_fw" "$pkgver" <<'PY'
+import struct, sys
+b = open(sys.argv[1], "rb").read(); i = b.find(b"$MN2")
+assert b[:4] == b"$AE1" and i >= 0, "not an Intel SST firmware image"
+v = ".".join(map(str, struct.unpack_from("<HHHH", b, i + 8)))
+assert v == sys.argv[2], f"firmware {v}, expected {sys.argv[2]}"
+print("SST firmware", v)
+PY
+}
+
+package() {
+  install -Dm644 "extract/$_fw" "$pkgdir/usr/lib/firmware/intel/avs/lkf/dsp_basefw.bin"
+}

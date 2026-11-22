@@ -1,0 +1,4 @@
+# ThinkPad X1 Fold Gen 1 (AVS): the DMIC capture gain ("DMIC Volume", Q1.31) starts at 0 (mute);
+# set it to 0 dB (2147483647). The PipeWire filter-chain adds the +18 dB on top.
+SUBSYSTEM=="sound", KERNEL=="controlC*", ATTRS{id}=="DMIC", ATTRS{number}=="?*", \
+  RUN+="/usr/bin/amixer -q -c %n cset name='DMIC Volume' 2147483647"

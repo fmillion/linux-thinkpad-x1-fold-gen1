@@ -1,0 +1,35 @@
+# Maintainer: fmillion <47171880+fmillion@users.noreply.github.com>
+# KDE Plasma integration for the ThinkPad X1 Fold Gen 1.
+# Local/CI builds from a checkout: X1FOLD_REPO="git+file://$PWD/../../.." makepkg
+
+pkgname=x1fold-plasma
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='KDE Plasma integration for the ThinkPad X1 Fold Gen 1 (keyboard dock mode, rotation, SDDM)'
+arch=(any)
+url='https://github.com/fmillion/linux-thinkpad-x1-fold-gen1'
+license=(GPL-2.0-only)
+depends=(
+  kwin
+  libkscreen     # kscreen-doctor
+  plasma-workspace
+  python
+  sddm
+  systemd        # busctl
+  x1fold-hwconfig
+)
+makedepends=(git)
+_x1fold_repo=${X1FOLD_REPO:-git+https://github.com/fmillion/linux-thinkpad-x1-fold-gen1.git}
+_x1fold_ref=${X1FOLD_REF:-branch=main}
+source=("x1fold::$_x1fold_repo#$_x1fold_ref")
+sha256sums=('SKIP')
+
+package() {
+  cd x1fold/userspace
+
+  install -Dm755 helper/thinkpad-fold-helper "$pkgdir/usr/bin/thinkpad-fold-helper"
+  sed 's|^Exec=.*|Exec=/usr/bin/thinkpad-fold-helper|' helper/thinkpad-fold-helper.desktop |
+    install -Dm644 /dev/stdin "$pkgdir/etc/xdg/autostart/thinkpad-fold-helper.desktop"
+  install -Dm644 -t "$pkgdir/usr/lib/sddm/sddm.conf.d" sddm/10-thinkpad-x1-fold-wayland.conf
+  install -Dm644 ../LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

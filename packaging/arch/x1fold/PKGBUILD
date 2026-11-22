@@ -1,0 +1,20 @@
+# Maintainer: fmillion <47171880+fmillion@users.noreply.github.com>
+# Metapackage: everything for Linux on the ThinkPad X1 Fold Gen 1.
+
+pkgname=x1fold
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Linux support for the Lenovo ThinkPad X1 Fold Gen 1 (metapackage)'
+arch=(any)
+url='https://github.com/fmillion/linux-thinkpad-x1-fold-gen1'
+license=(GPL-2.0-only)
+depends=(
+  linux-x1fold
+  linux-x1fold-ithc
+  x1fold-hwconfig
+  x1fold-sst-firmware
+)
+optdepends=(
+  'x1fold-plasma: KDE Plasma integration (keyboard dock mode, rotation, SDDM)'
+  'linux-x1fold-headers: to build out-of-tree modules for linux-x1fold'
+)

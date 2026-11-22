@@ -1,0 +1,56 @@
+# Maintainer: fmillion <47171880+fmillion@users.noreply.github.com>
+# Hardware configuration for the ThinkPad X1 Fold Gen 1 (desktop-independent).
+# Local/CI builds from a checkout: X1FOLD_REPO="git+file://$PWD/../../.." makepkg
+
+pkgname=x1fold-hwconfig
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Hardware configuration for the ThinkPad X1 Fold Gen 1 (udev, modprobe, PipeWire, GPU ID)'
+arch=(any)
+url='https://github.com/fmillion/linux-thinkpad-x1-fold-gen1'
+license=(GPL-2.0-only)
+depends=(
+  alsa-utils          # amixer in the udev rules
+  bluez
+  bluez-utils
+  intel-media-driver
+  linux-firmware-intel  # iwlwifi, i915 DMC/GuC/HuC, Bluetooth ibt-20-1-3
+  mesa
+  pipewire
+  wireplumber
+  x1fold-sst-firmware
+)
+optdepends=(
+  'linux-x1fold: the patched kernel this configuration is made for'
+)
+makedepends=(git)
+_x1fold_repo=${X1FOLD_REPO:-git+https://github.com/fmillion/linux-thinkpad-x1-fold-gen1.git}
+_x1fold_ref=${X1FOLD_REF:-branch=main}
+source=("x1fold::$_x1fold_repo#$_x1fold_ref")
+sha256sums=('SKIP')
+
+package() {
+  cd x1fold/userspace
+
+  install -Dm644 -t "$pkgdir/usr/lib/udev/rules.d" \
+    udev/60-thinkpad-x1-fold.rules \
+    udev/61-thinkpad-x1-fold-hdmi-audio.rules \
+    udev/62-thinkpad-x1-fold-dmic.rules
+  install -Dm644 -t "$pkgdir/usr/lib/modprobe.d" \
+    modprobe.d/thinkpad-x1-fold-audio.conf \
+    modprobe.d/thinkpad-x1-fold-i915.conf
+  install -Dm644 -t "$pkgdir/usr/share/wireplumber/wireplumber.conf.d" \
+    wireplumber/51-thinkpad-x1-fold.conf
+  install -Dm644 -t "$pkgdir/usr/share/pipewire/pipewire.conf.d" \
+    pipewire/51-thinkpad-x1-fold-mic.conf
+
+  # Mesa ID workaround (until Mesa knows 0x9840); enabled statically, only acts on 8086:9840
+  install -Dm644 -t "$pkgdir/usr/lib/systemd/system" systemd/thinkpad-x1-fold-gpu-id.service
+  install -dm755 "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+  ln -s ../thinkpad-x1-fold-gpu-id.service \
+    "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/thinkpad-x1-fold-gpu-id.service"
+
+  # optional debug aid, not active: copy to /etc/sysctl.d/ to enable
+  install -Dm644 -t "$pkgdir/usr/share/doc/$pkgname" sysctl/90-thinkpad-x1-fold-lockup-debug.conf
+  install -Dm644 ../LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
