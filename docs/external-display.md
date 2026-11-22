@@ -92,3 +92,9 @@ Lakefield's external display path, as established:
 - **Transcoder side:** TGL (per-transcoder DP_TP_CTL, TRANS_DDI_FUNC_CTL port bits 31:27,
   TRANS_CLK_SEL (port+1)<<28).
 - **PW_2:** absent; transcoders B/C work without it.
+
+## Default on (patch 0040)
+`i915.lkf_tc` is a tri-state like `lkf_display`: -1 (default) = on for the DMI-validated machines
+(ThinkPad X1 Fold Gen 1), 0/1 force. Validated before switching: extend/mirror with the panel,
+unplug/replug, s2idle with the monitor connected, display audio. Still to verify: boot with the port
+empty and plug in later; the second USB-C port (TC2 / DDI E); link rates above 1.62 GHz; the dock.

@@ -1,7 +1,7 @@
 From dbed921fd052d2cd41d33fa5778e10b7d50e7006 Mon Sep 17 00:00:00 2001
 From: Cai Yu <caiyu7372@gmail.com>
 Date: Sat, 26 Sep 2026 07:40:41 +0800
-Subject: [PATCH 25/39] Bluetooth: hci_intel: add the CcP controller (hardware
+Subject: [PATCH 25/40] Bluetooth: hci_intel: add the CcP controller (hardware
  variant 0x14)
 
 The Intel CcP controller (hardware variant 0x14) is used on the

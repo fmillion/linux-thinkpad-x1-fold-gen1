@@ -1,7 +1,7 @@
 From d8a7940baabdf94024513ffbc6c336eb02efbf28 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 08:05:02 +0000
-Subject: [PATCH 23/39] drm/i915/dsi: X1 Fold: offer the keyboard-docked
+Subject: [PATCH 23/40] drm/i915/dsi: X1 Fold: offer the keyboard-docked
  1536x1006 mode, scanned out above the keyboard
 
 With the magnetic keyboard on the lower half of the ThinkPad X1 Fold's

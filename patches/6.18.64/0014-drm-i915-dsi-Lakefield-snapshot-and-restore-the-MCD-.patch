@@ -1,7 +1,7 @@
 From f69bcd0b1603c35791e5ccda38e60b946379542e Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 06:29:00 +0000
-Subject: [PATCH 14/39] drm/i915/dsi: Lakefield: snapshot and restore the MCD
+Subject: [PATCH 14/40] drm/i915/dsi: Lakefield: snapshot and restore the MCD
  D-PHY lane state
 
 Lakefield's D-PHY is a Modular Configurable D-PHY (MCD) with its own

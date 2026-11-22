@@ -1,0 +1,87 @@
+From 1bf42790f961674a0f3b52d345fe5a811014b5bd Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 11:38:56 +0000
+Subject: [PATCH 40/40] drm/i915: Lakefield: lkf_tc auto, on for the ThinkPad
+ X1 Fold Gen 1
+
+i915.lkf_tc becomes a tri-state like lkf_display: -1 (default) enables the
+USB-C DP alt mode ports on the machines where the Lakefield display has been
+validated (DMI), 0/1 force it. Resolved once at probe.
+
+Validated on the X1 Fold Gen 1: DP-1 via a USB-C->HDMI adapter at 1080p with
+the panel (extend/mirror), hot-unplug/replug, s2idle with the monitor
+connected, display audio.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_display_device.c | 11 +++++++++--
+ drivers/gpu/drm/i915/display/intel_display_params.c |  7 ++++---
+ drivers/gpu/drm/i915/display/intel_display_params.h |  2 +-
+ 3 files changed, 14 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display_device.c b/drivers/gpu/drm/i915/display/intel_display_device.c
+index 675cb4f7c..bbe05cdab 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_device.c
++++ b/drivers/gpu/drm/i915/display/intel_display_device.c
+@@ -1684,11 +1684,11 @@ static const struct dmi_system_id lkf_display_validated[] = {
+ /*
+  * Lakefield Type-C (DP alt mode) display support on DDI D/E: ICL-style FIA,
+  * hot-plug and clocking, with the TGL Dekel PHY (as programmed by the
+- * Lakefield GOP). Experimental, behind i915.lkf_tc.
++ * Lakefield GOP). i915.lkf_tc, resolved at probe (-1 = validated machines).
+  */
+ bool intel_display_lkf_tc(struct intel_display *display)
+ {
+-	return display->platform.lakefield && display->params.lkf_tc;
++	return display->platform.lakefield && display->params.lkf_tc > 0;
+ }
+ 
+ /* Type-C PHY is a Dekel PHY (TGL..ADL-P, and Lakefield) rather than an ICL MG PHY */
+@@ -1752,6 +1752,13 @@ struct intel_display *intel_display_device_probe(struct pci_dev *pdev)
+ 		goto no_display;
+ 	}
+ 
++	/* Lakefield USB-C DP: auto = on where validated (same list as the display) */
++	if (pdev->device == 0x9840 && display->params.lkf_tc < 0)
++		display->params.lkf_tc = dmi_check_system(lkf_display_validated) ? 1 : 0;
++	if (pdev->device == 0x9840)
++		drm_dbg_kms(display->drm, "Lakefield: USB-C DP alt mode %s (i915.lkf_tc)\n",
++			    str_on_off(display->params.lkf_tc > 0));
++
+ 	info = desc->info;
+ 	if (!info)
+ 		info = probe_gmdid_display(display, &ip_ver);
+diff --git a/drivers/gpu/drm/i915/display/intel_display_params.c b/drivers/gpu/drm/i915/display/intel_display_params.c
+index fbfd873a3..cadb2b0dd 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_params.c
++++ b/drivers/gpu/drm/i915/display/intel_display_params.c
+@@ -139,9 +139,10 @@ intel_display_param_named_unsafe(lkf_display, int, 0400,
+ 	"(-1 = auto [default]: on for validated machines (ThinkPad X1 Fold Gen 1), "
+ 	"0 = render/media only, firmware framebuffer stays on simpledrm, 1 = on)");
+ 
+-intel_display_param_named_unsafe(lkf_tc, bool, 0400,
+-	"Lakefield: enable the USB-C DP alt mode ports DDI D/E (experimental) "
+-	"(0=disabled [default], 1=enabled)");
++intel_display_param_named_unsafe(lkf_tc, int, 0400,
++	"Lakefield: drive the USB-C DP alt mode ports DDI D/E "
++	"(-1 = auto [default]: on for validated machines (ThinkPad X1 Fold Gen 1), "
++	"0 = off, 1 = on)");
+ 
+ intel_display_param_named_unsafe(enable_dmc_wl, int, 0400,
+ 	"Enable DMC wakelock "
+diff --git a/drivers/gpu/drm/i915/display/intel_display_params.h b/drivers/gpu/drm/i915/display/intel_display_params.h
+index 4c3e6908b..646fcaaa0 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_params.h
++++ b/drivers/gpu/drm/i915/display/intel_display_params.h
+@@ -51,7 +51,7 @@ struct drm_printer;
+ 	param(bool, enable_psr2_sel_fetch, true, 0400) \
+ 	param(int, enable_dmc_wl, -1, 0400) \
+ 	param(int, lkf_display, -1, 0400) \
+-	param(bool, lkf_tc, false, 0400) \
++	param(int, lkf_tc, -1, 0400) \
+ 
+ #define MEMBER(T, member, ...) T member;
+ struct intel_display_params {
+-- 
+2.56.1
+

@@ -48,10 +48,11 @@ i915 GuC/HuC/DMC, later audio/BT)**, a network service and `sshd` enabled.
 - `userspace/helper/thinkpad-fold-helper` → `/usr/local/bin/` (mode 755)
 - `userspace/helper/thinkpad-fold-helper.desktop` → `/etc/xdg/autostart/` (absolute Exec: Plasma's systemd autostart does not expand `$HOME`)
 
-## External display + display audio (experimental, i915.lkf_tc)
-- Kernel: patches 0031-0036 (i915 Type-C on DDI D/E behind `i915.lkf_tc`, HDA Lakefield display
+## External display + display audio (i915.lkf_tc)
+- Kernel: patches 0031-0036 + 0040 (i915 Type-C on DDI D/E behind `i915.lkf_tc`, HDA Lakefield display
   audio). Install the rebuilt `i915`, `snd-hda-core`, `snd-hda-codec-intelhdmi` to `updates/`.
-- Enable for testing with `i915.lkf_tc=1` on the kernel command line (one-shot GRUB entries
-  `fold-lkf-tc` [no i915 autoload, text console] and `fold-lkf-tc-gui` live in /etc/grub.d/40_custom).
+- On by default on the X1 Fold Gen 1 since patch 0040 (`i915.lkf_tc=-1` = auto by DMI; `0` turns
+  the USB-C ports off, e.g. to rule them out when debugging). The one-shot test entries used during
+  bring-up were removed (copy in /var/tmp/40_custom.lkf-tc-tests on the dev install).
 - `userspace/udev/61-thinkpad-x1-fold-hdmi-audio.rules` → `/etc/udev/rules.d/`.
 - `userspace/wireplumber/51-thinkpad-x1-fold.conf` (updated: separate display-audio sink name).

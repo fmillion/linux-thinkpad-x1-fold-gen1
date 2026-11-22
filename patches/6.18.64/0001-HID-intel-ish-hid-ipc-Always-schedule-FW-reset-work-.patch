@@ -1,7 +1,7 @@
 From 19410e126878357128b32390b63377fc0f34872d Mon Sep 17 00:00:00 2001
 From: Zhang Lixu <lixu.zhang@intel.com>
 Date: Fri, 17 Oct 2025 10:22:16 +0800
-Subject: [PATCH 01/39] HID: intel-ish-hid: ipc: Always schedule FW reset work
+Subject: [PATCH 01/40] HID: intel-ish-hid: ipc: Always schedule FW reset work
  on RESET_NOTIFY/ACK
 
 commit 9e097dc9df8027a590dbca503d8b52e1a86024d7 upstream.
