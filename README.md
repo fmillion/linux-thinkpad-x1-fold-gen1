@@ -61,8 +61,9 @@ On a freshly installed Arch Linux on the Fold, with a USB keyboard and a network
 curl -fsSL https://raw.githubusercontent.com/fmillion/linux-thinkpad-x1-fold-gen1/main/install.sh | sudo bash
 ```
 
-The installer builds and installs the packages, makes the patched kernel the default boot entry
-and explains how to pair the keyboard after the reboot. Without a binary repository it builds the
+The installer builds and installs the packages and makes the patched kernel the default boot
+entry. After the reboot, pair the keyboard in System Settings → Bluetooth (it asks for a PIN typed
+on the keyboard). Without a binary repository it builds the
 kernel from source, which takes hours on the Fold itself. See [`packaging/README.md`](packaging/README.md)
 for the packages and the options, and [`docs/install-checklist.md`](docs/install-checklist.md) for
 a manual installation.

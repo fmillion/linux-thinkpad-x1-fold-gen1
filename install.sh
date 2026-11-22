@@ -147,16 +147,10 @@ say "Done"
 cat <<'EOF'
 After the reboot:
   * The panel, touch, audio, Wi-Fi, Bluetooth and USB-C displays should all come up.
-  * Pair the Fold keyboard (it needs a passkey and does not show up in Plasma's list yet):
-      hold the keyboard's Bluetooth key until it blinks, then run
-        bluetoothctl
-          agent KeyboardDisplay
-          default-agent
-          scan le          # wait for an LE device without a name
-          pair <address>   # type the shown passkey on the Fold keyboard, then Enter
-          trust <address>
-          connect <address>
-    See docs/bluetooth.md in the project for details.
+  * Pair the Fold keyboard: hold its Bluetooth key until it blinks, then add it in
+    System Settings -> Bluetooth ("Lenovo Fold Mini Keyboard"; type the shown PIN on the
+    keyboard, then Enter). Without Plasma: bluetoothctl (agent KeyboardDisplay, scan le,
+    pair/trust/connect <address>), see docs/bluetooth.md.
   * Optional: switch off Plasma's automatic suspend while setting up.
 EOF
 if ask "Reboot now?" y; then

@@ -94,3 +94,9 @@ Cause, from ACPI:
   download at 921600 timing out (`0xfc09 tx timeout`) — is now covered by resetting the controller
   and re-running the whole setup at 115200. Resume no longer forces flow control off (the LPM
   helpers restore the operational state: flow control on).
+
+## Pairing in Plasma works (since the LE Coded fix)
+On a fresh install with the packages (2026-11-22), Plasma's Bluetooth settings list
+"Lenovo Fold Mini Keyboard" and pair it, including the PIN typed on the keyboard. The earlier
+failure (not listed; `AuthenticationCanceled`) came before patch 0030: with LE Coded scanning the
+keyboard was barely seen at all. `bluetoothctl` remains the fallback without Plasma.
