@@ -42,3 +42,31 @@ point i915 held no AUX/TC power well and had not taken PHY ownership through the
 accesses stalled the fabric. Only probe the PHY from inside i915, after the AUX power well is up
 and ownership is taken (the TGL `intel_tc` sequence). The script is kept only as a record of
 what not to do. PHY identification moves to static analysis of the Windows driver.
+
+## Type-C PHY = Dekel (TGL-style), confirmed from the Lakefield GOP (static analysis)
+Source: `IntelGopDriver.efi` from the N2PET64W BIOS image (LKF-only code). Its PHY accessors
+(read at RVA 0x11cf0, write 0x11d64, read-modify-write 0x11de4) take a port and a
+`{offset, window}` descriptor:
+| DDI | PHY base | HIP_INDEX (0x1010a0) field | = |
+|---|---|---|---|
+| D (port 3) | 0x168000 | bits 3:0 | TC1 |
+| E (port 4) | 0x169000 | bits 11:8 | TC2 |
+This is exactly i915's TGL Dekel layout (`_DKL_PHY1_BASE`, `HIP_INDEX_VAL(tc, v) = v << 8*tc`).
+No ICL MG PHY address (0x168a00, 0x1683a0, 0x1688d4, 0x16812c) occurs in the GOP.
+
+Registers the GOP programs (window<<12 | offset): `DKL_TX_DPCNTL0/1/2` for both lanes
+(0x02c0–0x02c8, 0x12c0–0x12c8), `DKL_CLKTOP2_HSCLKCTL` 0x20d4, `DKL_CLKTOP2_CORECLKCTL1` 0x20d8,
+`DKL_REFCLKIN_CTL` 0x212c, `DKL_PLL_DIV0/DIV1/SSC/BIAS/TDC_COLDST_BIAS` 0x2200–0x2218 — all as in
+i915's TGL Dekel code — plus 0x2130, 0x2208, 0x220c, 0x222c, 0x2244, 0x224c, which i915 leaves at
+their defaults (check if link training fails). PLL enable is `MG_PLL_ENABLE0` 0x46030 (ICL/TGL).
+
+### Implementation plan (i915)
+- LKF ports: A (DSI), B (combo), D→TC1, E→TC2; `port_mask` adds D/E; port→TC mapping
+  `port - PORT_D` (ICL uses `port - PORT_C`); HPD pins D→`HPD_PORT_TC1`, E→`HPD_PORT_TC2` in the
+  gen11 DE HPD block (TC HPD only — no Thunderbolt, no PCH TC).
+- PHY: a `dekel` predicate (DISPLAY_VER >= 12 **or Lakefield**) wherever i915 chooses Dekel over
+  MG (DDI buffer translations/signal levels, DP mode, PLL read/write/compute in the dpll manager,
+  power-gating/`TC_COLD`).
+- TC mode: the ICL FIA ops (DFLEXDPSP live state / DFLEXDPCSSS ownership / DFLEXDPPMS ready),
+  DP alt mode only; legacy and TBT modes not present.
+- PLLs: EHL combo DPLL0/1/4 for port B, `MG_PLL1/2` (0x46030/0x46034) as Dekel PLLs for D/E.
