@@ -69,3 +69,23 @@ Cause, from ACPI:
   (current state) → D3 anyway. D3 → `_PS3` → kill line asserted → controller powered off.
 - `hci_intel` has no PM handling on the serdev path (`intel_pm_ops`/LPM are platform-device only;
   `intel_set_power()` returns early for serdev), so it does not notice the reset.
+
+## Fix: keep BT powered in s2idle, LPM, keyboard wake (patches 0037-0039)
+- 0037 (ACPI): for s2idle, a device that may wake through a wake IRQ and whose `_S0W` state is
+  not implemented now goes to the deepest implemented state above it (here D0) instead of
+  D3cold → `_PS3` (kill line) is no longer run. Other devices keep the old fallback.
+- 0038 (hci_intel serdev): host-wake from the ACPI resources (`acpi_dev_gpio_irq_get()`;
+  `fwnode_irq_get()` only parses Interrupt resources) — here GpioInt pad 185, irq "bt-host-wake";
+  device wakeup capable, wake IRQ registered (that also makes ACPI evaluate `_S0W`).
+- 0039 (hci_intel serdev): Intel LPM for system sleep — suspend request `f1 01 01 01` acked
+  ("Suspended"), controller holds data and wakes us via the host-wake GPIO; on resume the LPM
+  wake packet (or resume-ack). The CcP sends no LPM "TX idle" notifications on this path, so the
+  request is not gated on them. Setup retries Read Version after another reset pulse (the
+  intermittent boot failure: stale bytes from the controller's boot put the H4 parser inside a
+  packet).
+- Verified: s2idle with the keyboard connected, untouched ≥ 1 min (power LED breathing), a
+  keypress wakes the Fold in ~5 s, typing works immediately (no firmware reload).
+- The wake arrives as IRQ 14 (the GPIO controller); the host-wake handler itself is not replayed
+  after resume (count stays 0) — harmless, resume sends the LPM wake packet.
+- Open: confirm the setup retry fixes the boot-time failure (it was intermittent: watch for
+  "resetting it (1/2)" in dmesg).

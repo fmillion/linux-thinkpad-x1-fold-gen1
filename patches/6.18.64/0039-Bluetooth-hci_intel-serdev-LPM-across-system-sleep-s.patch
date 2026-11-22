@@ -1,0 +1,250 @@
+From 19c85d6593fea0013dd2516dd61c1e78fd00bfa8 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 11:35:38 +0000
+Subject: [PATCH 39/39] Bluetooth: hci_intel: serdev: LPM across system sleep,
+ setup retry
+
+System sleep with the controller kept powered (wakeup enabled, see the ACPI
+_S0W change): put it into Intel LPM on suspend (suspend request, acked by the
+CcP), so it holds its data and signals host-wake instead of pushing packets
+into a suspended UART (seen as frame errors on resume), and bring it back on
+resume (resume-ack after a host-wake, else the LPM wake packet). The UART
+link settings of intel_setup() are restored afterwards. The CcP sends no LPM
+TX notifications over serdev, so the suspend request is not gated on TX idle.
+
+Setup: the controller boots and talks while the port is still closed, so the
+H4 parser can start inside a packet and swallow the answer to Read Version
+(seen as "Frame reassembly failed" + -ETIMEDOUT at boot, intermittently).
+Retry up to twice after another reset pulse with the port open and the
+parser idle. Frame errors now dump the offending bytes.
+
+Tested on the ThinkPad X1 Fold Gen 1: a keypress on the BT keyboard wakes
+the system from s2idle; keyboard works immediately after resume.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/bluetooth/hci_intel.c | 137 +++++++++++++++++++++++++++++++---
+ 1 file changed, 127 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/bluetooth/hci_intel.c b/drivers/bluetooth/hci_intel.c
+index 163ce8f9d..a3897d558 100644
+--- a/drivers/bluetooth/hci_intel.c
++++ b/drivers/bluetooth/hci_intel.c
+@@ -541,6 +541,50 @@ static int intel_set_baudrate(struct hci_uart *hu, unsigned int speed)
+ 	return 0;
+ }
+ 
++#define INTEL_RESET_PULSE_MS	500
++#define INTEL_BOOT_DELAY_MS	2000
++#define INTEL_SETUP_RESETS	2
++
++/* serdev attachment: the hci_uart plus the controller's reset (BT kill) line */
++struct intel_serdev {
++	struct hci_uart hu;
++	struct gpio_desc *reset;
++	atomic_t host_woke;	/* host-wake seen while LPM suspended */
++};
++
++static void intel_serdev_pulse_reset(struct gpio_desc *reset)
++{
++	gpiod_set_value_cansleep(reset, 0);
++	msleep(INTEL_RESET_PULSE_MS);
++	gpiod_set_value_cansleep(reset, 1);
++	msleep(INTEL_BOOT_DELAY_MS);
++}
++
++/*
++ * The controller boots (and talks) while the port is still closed, so the H4
++ * parser can start in the middle of a packet: a stale header then swallows the
++ * answer to the first command. Reset the controller with the port open and
++ * the parser idle, and try again.
++ */
++static bool intel_serdev_reset_controller(struct hci_uart *hu)
++{
++	struct intel_data *intel = hu->priv;
++	struct intel_serdev *is;
++
++	if (!hu->serdev)
++		return false;
++
++	is = container_of(hu, struct intel_serdev, hu);
++	if (!is->reset)
++		return false;
++
++	intel_serdev_pulse_reset(is->reset);
++	serdev_device_write_flush(hu->serdev);
++	kfree_skb(intel->rx_skb);
++	intel->rx_skb = NULL;
++	return true;
++}
++
+ static int intel_setup(struct hci_uart *hu)
+ {
+ 	struct intel_data *intel = hu->priv;
+@@ -609,6 +653,13 @@ static int intel_setup(struct hci_uart *hu)
+ 	 * loaded.
+ 	 */
+ 	err = btintel_read_version(hdev, &ver);
++	for (int i = 0; err && i < INTEL_SETUP_RESETS; i++) {
++		bt_dev_warn(hdev, "No valid answer from the controller, resetting it (%d/%d)",
++			    i + 1, INTEL_SETUP_RESETS);
++		if (!intel_serdev_reset_controller(hu))
++			break;
++		err = btintel_read_version(hdev, &ver);
++	}
+ 	if (err)
+ 		return err;
+ 
+@@ -894,6 +945,13 @@ static int intel_setup(struct hci_uart *hu)
+ 	/* Enable LPM if matching pdev with wakeup enabled, set TX active
+ 	 * until further LPM TX notification.
+ 	 */
++	/*
++	 * serdev: the CcP sends no LPM TX notifications here, so do not wait for
++	 * a "TX idle" before the suspend request; the request is acked or not.
++	 */
++	if (hu->serdev && device_may_wakeup(&hu->serdev->dev))
++		set_bit(STATE_LPM_ENABLED, &intel->flags);
++
+ 	mutex_lock(&intel_device_list_lock);
+ 	list_for_each_entry(idev, &intel_device_list, list) {
+ 		if (!hu->tty || !hu->tty->dev)
+@@ -1053,7 +1111,8 @@ static int intel_recv(struct hci_uart *hu, const void *data, int count)
+ 	if (IS_ERR(intel->rx_skb)) {
+ 		int err = PTR_ERR(intel->rx_skb);
+ 
+-		bt_dev_err(hu->hdev, "Frame reassembly failed (%d)", err);
++		bt_dev_err(hu->hdev, "Frame reassembly failed (%d), %d bytes: %*ph%s",
++			   err, count, min(count, 16), data, count > 16 ? " ..." : "");
+ 		intel->rx_skb = NULL;
+ 		return err;
+ 	}
+@@ -1333,17 +1392,71 @@ static struct platform_driver intel_driver = {
+  * setup.  Measured on the ThinkPad X1 Fold Gen1: 500 ms of reset pulse, then
+  * 2 s until the bootloader answers the first command.
+  */
+-#define INTEL_RESET_PULSE_MS	500
+-#define INTEL_BOOT_DELAY_MS	2000
+ 
+ static irqreturn_t intel_serdev_host_wake(int irq, void *data)
+ {
+ 	struct serdev_device *serdev = data;
++	struct hci_uart *hu = serdev_device_get_drvdata(serdev);
++	struct intel_serdev *is = container_of(hu, struct intel_serdev, hu);
+ 
++	/* Answered from ->resume(), once the UART is back */
++	atomic_set(&is->host_woke, 1);
+ 	pm_wakeup_dev_event(&serdev->dev, 0, false);
+ 	return IRQ_HANDLED;
+ }
+ 
++#ifdef CONFIG_PM_SLEEP
++/*
++ * System sleep with the controller kept powered (wakeup enabled): put it in
++ * LPM so it holds its data and signals host-wake instead of talking to a
++ * suspended UART, and bring it back on resume.
++ */
++static int intel_serdev_suspend(struct device *dev)
++{
++	struct hci_uart *hu = dev_get_drvdata(dev);
++	struct intel_serdev *is = container_of(hu, struct intel_serdev, hu);
++	int err = 0;
++
++	atomic_set(&is->host_woke, 0);
++
++	percpu_down_read(&hu->proto_lock);
++	if (test_bit(HCI_UART_PROTO_READY, &hu->flags) && hu->priv)
++		err = intel_lpm_suspend(hu);
++	percpu_up_read(&hu->proto_lock);
++
++	if (err)
++		bt_dev_warn(hu->hdev, "LPM suspend failed (%d), no wake by Bluetooth", err);
++	return 0;
++}
++
++static int intel_serdev_resume(struct device *dev)
++{
++	struct hci_uart *hu = dev_get_drvdata(dev);
++	struct intel_serdev *is = container_of(hu, struct intel_serdev, hu);
++	struct intel_data *intel;
++
++	percpu_down_read(&hu->proto_lock);
++	intel = test_bit(HCI_UART_PROTO_READY, &hu->flags) ? hu->priv : NULL;
++	if (intel && test_bit(STATE_SUSPENDED, &intel->flags)) {
++		if (atomic_xchg(&is->host_woke, 0)) {
++			intel_lpm_host_wake(hu);
++		} else if (intel_lpm_resume(hu)) {
++			bt_dev_warn(hu->hdev, "LPM resume failed");
++			clear_bit(STATE_SUSPENDED, &intel->flags);
++		}
++		/* back to the link settings of intel_setup() */
++		serdev_device_set_flow_control(hu->serdev, false);
++		serdev_device_set_rts(hu->serdev, true);
++	}
++	percpu_up_read(&hu->proto_lock);
++
++	return 0;
++}
++#endif
++
++static DEFINE_SIMPLE_DEV_PM_OPS(intel_serdev_pm_ops, intel_serdev_suspend,
++				intel_serdev_resume);
++
+ /*
+  * Make the controller a wakeup source through its host-wake interrupt (ACPI
+  * GpioInt/Interrupt, ExclusiveAndWake). Besides letting it wake the system,
+@@ -1356,7 +1469,10 @@ static void intel_serdev_setup_wake(struct serdev_device *serdev)
+ 	struct device *dev = &serdev->dev;
+ 	int irq, err;
+ 
+-	irq = fwnode_irq_get(dev_fwnode(dev), 0);
++	/* GpioInt (this firmware) or a plain Interrupt resource (SDM9 != 0) */
++	irq = acpi_dev_gpio_irq_get(ACPI_COMPANION(dev), 0);
++	if (irq <= 0)
++		irq = fwnode_irq_get(dev_fwnode(dev), 0);
+ 	if (irq <= 0) {
+ 		dev_dbg(dev, "No host-wake interrupt (%d)\n", irq);
+ 		return;
+@@ -1382,13 +1498,15 @@ static void intel_serdev_setup_wake(struct serdev_device *serdev)
+ 
+ static int intel_serdev_probe(struct serdev_device *serdev)
+ {
++	struct intel_serdev *is;
+ 	struct hci_uart *hu;
+ 	struct gpio_desc *reset;
+ 	int err;
+ 
+-	hu = devm_kzalloc(&serdev->dev, sizeof(*hu), GFP_KERNEL);
+-	if (!hu)
++	is = devm_kzalloc(&serdev->dev, sizeof(*is), GFP_KERNEL);
++	if (!is)
+ 		return -ENOMEM;
++	hu = &is->hu;
+ 
+ 	hu->serdev = serdev;
+ 	/* hci_serdev.c looks the hci_uart up through the drvdata */
+@@ -1405,11 +1523,9 @@ static int intel_serdev_probe(struct serdev_device *serdev)
+ 		return dev_err_probe(&serdev->dev, PTR_ERR(reset),
+ 				     "Unable to retrieve reset gpio\n");
+ 
++	is->reset = reset;
+ 	if (reset) {
+-		gpiod_set_value_cansleep(reset, 0);
+-		msleep(INTEL_RESET_PULSE_MS);
+-		gpiod_set_value_cansleep(reset, 1);
+-		msleep(INTEL_BOOT_DELAY_MS);
++		intel_serdev_pulse_reset(reset);
+ 	} else {
+ 		dev_warn(&serdev->dev, "No reset gpio, relying on the firmware state\n");
+ 	}
+@@ -1440,6 +1556,7 @@ static struct serdev_device_driver intel_serdev_driver = {
+ 	.driver = {
+ 		.name = "hci_uart_intel",
+ 		.acpi_match_table = ACPI_PTR(intel_serdev_acpi_match),
++		.pm = pm_sleep_ptr(&intel_serdev_pm_ops),
+ 	},
+ };
+ #endif
+-- 
+2.56.1
+

@@ -1,0 +1,118 @@
+From a5f3af719360986080cc9d4d9e22bb897bb8c37b Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 11:17:35 +0000
+Subject: [PATCH 38/39] Bluetooth: hci_intel: serdev: host-wake as wake IRQ,
+ wakeup capable
+
+The serdev path had no wakeup support: the controller was neither a wakeup
+source nor kept powered in s2idle (ACPI put it in D3; on the ThinkPad X1
+Fold Gen 1 _PS3 cuts its power and the driver, with no PM handling here,
+kept talking to the bootloader after resume).
+
+Request the host-wake interrupt from the ACPI resources (GpioInt or
+Interrupt, both seen in the firmware), mark the device wakeup capable and
+register the interrupt as its wake IRQ.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/bluetooth/hci_intel.c | 59 ++++++++++++++++++++++++++++++++++-
+ 1 file changed, 58 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/bluetooth/hci_intel.c b/drivers/bluetooth/hci_intel.c
+index 2e76f102b..163ce8f9d 100644
+--- a/drivers/bluetooth/hci_intel.c
++++ b/drivers/bluetooth/hci_intel.c
+@@ -19,6 +19,8 @@
+ #include <linux/acpi.h>
+ #include <linux/interrupt.h>
+ #include <linux/pm_runtime.h>
++#include <linux/pm_wakeirq.h>
++#include <linux/property.h>
+ 
+ #include <net/bluetooth/bluetooth.h>
+ #include <net/bluetooth/hci_core.h>
+@@ -1334,10 +1336,55 @@ static struct platform_driver intel_driver = {
+ #define INTEL_RESET_PULSE_MS	500
+ #define INTEL_BOOT_DELAY_MS	2000
+ 
++static irqreturn_t intel_serdev_host_wake(int irq, void *data)
++{
++	struct serdev_device *serdev = data;
++
++	pm_wakeup_dev_event(&serdev->dev, 0, false);
++	return IRQ_HANDLED;
++}
++
++/*
++ * Make the controller a wakeup source through its host-wake interrupt (ACPI
++ * GpioInt/Interrupt, ExclusiveAndWake). Besides letting it wake the system,
++ * this keeps it powered in s2idle: on the ThinkPad X1 Fold Gen 1 the ACPI
++ * _PS3 of the device asserts the BT kill line, and _S0W only applies to
++ * devices that may wake and have a wake IRQ.
++ */
++static void intel_serdev_setup_wake(struct serdev_device *serdev)
++{
++	struct device *dev = &serdev->dev;
++	int irq, err;
++
++	irq = fwnode_irq_get(dev_fwnode(dev), 0);
++	if (irq <= 0) {
++		dev_dbg(dev, "No host-wake interrupt (%d)\n", irq);
++		return;
++	}
++
++	err = devm_request_irq(dev, irq, intel_serdev_host_wake, 0,
++			       "bt-host-wake", serdev);
++	if (err) {
++		dev_warn(dev, "Unable to request host-wake irq %d: %d\n", irq, err);
++		return;
++	}
++
++	device_init_wakeup(dev, true);
++	err = dev_pm_set_wake_irq(dev, irq);
++	if (err) {
++		dev_warn(dev, "Unable to set wake irq %d: %d\n", irq, err);
++		device_init_wakeup(dev, false);
++		return;
++	}
++
++	dev_info(dev, "host-wake irq %d, wakeup enabled\n", irq);
++}
++
+ static int intel_serdev_probe(struct serdev_device *serdev)
+ {
+ 	struct hci_uart *hu;
+ 	struct gpio_desc *reset;
++	int err;
+ 
+ 	hu = devm_kzalloc(&serdev->dev, sizeof(*hu), GFP_KERNEL);
+ 	if (!hu)
+@@ -1367,7 +1414,15 @@ static int intel_serdev_probe(struct serdev_device *serdev)
+ 		dev_warn(&serdev->dev, "No reset gpio, relying on the firmware state\n");
+ 	}
+ 
+-	return hci_uart_register_device(hu, &intel_serdev_proto);
++	intel_serdev_setup_wake(serdev);
++
++	err = hci_uart_register_device(hu, &intel_serdev_proto);
++	if (err) {
++		dev_pm_clear_wake_irq(&serdev->dev);
++		device_init_wakeup(&serdev->dev, false);
++	}
++
++	return err;
+ }
+ 
+ static void intel_serdev_remove(struct serdev_device *serdev)
+@@ -1375,6 +1430,8 @@ static void intel_serdev_remove(struct serdev_device *serdev)
+ 	struct hci_uart *hu = serdev_device_get_drvdata(serdev);
+ 
+ 	hci_uart_unregister_device(hu);
++	dev_pm_clear_wake_irq(&serdev->dev);
++	device_init_wakeup(&serdev->dev, false);
+ }
+ 
+ static struct serdev_device_driver intel_serdev_driver = {
+-- 
+2.56.1
+

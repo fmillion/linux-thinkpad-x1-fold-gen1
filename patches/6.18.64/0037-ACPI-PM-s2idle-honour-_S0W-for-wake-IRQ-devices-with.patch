@@ -1,0 +1,47 @@
+From 67c6340f596ce010ff1cd2ebe291c1dba4e8f49f Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 11:17:33 +0000
+Subject: [PATCH 37/39] ACPI: PM: s2idle: honour _S0W for wake-IRQ devices
+ without that D-state
+
+acpi_dev_pm_get_state() falls back to D3cold when _SxW returns a D-state the
+device does not implement. For a device that may wake the system from s2idle
+through a wake IRQ (GpioInt/Interrupt ExclusiveAndWake), D3cold is exactly the
+state it cannot wake from - and on the ThinkPad X1 Fold Gen 1 the Bluetooth
+controller's _PS3 asserts its kill line, so it is powered off and comes back
+in its bootloader (_S0W = 2, no _PS2).
+
+In that case use the deepest implemented state not deeper than _S0W (here D0).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/acpi/device_pm.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/drivers/acpi/device_pm.c b/drivers/acpi/device_pm.c
+index 4e0583274..34c20012c 100644
+--- a/drivers/acpi/device_pm.c
++++ b/drivers/acpi/device_pm.c
+@@ -756,6 +756,19 @@ static int acpi_dev_pm_get_state(struct device *dev, struct acpi_device *adev,
+ 			if (has_sxd && target_state > ACPI_STATE_S0)
+ 				d_max = d_min;
+ 		} else if (ACPI_SUCCESS(status) && ret <= ACPI_STATE_D3_COLD) {
++			if (!adev->power.states[ret].flags.valid &&
++			    target_state == ACPI_STATE_S0 && dev->power.wakeirq) {
++				/*
++				 * _S0W names the deepest state from which the device
++				 * can still signal wakeup through its wake IRQ. If that
++				 * state is not implemented (e.g. _S0W = 2 without
++				 * _PS2), use the deepest implemented state above it
++				 * instead of D3cold, from which it could not wake (and
++				 * which may cut its power through _PS3).
++				 */
++				while (ret > d_min && !adev->power.states[ret].flags.valid)
++					ret--;
++			}
+ 			/* Fall back to D3cold if ret is not a valid state. */
+ 			if (!adev->power.states[ret].flags.valid)
+ 				ret = ACPI_STATE_D3_COLD;
+-- 
+2.56.1
+

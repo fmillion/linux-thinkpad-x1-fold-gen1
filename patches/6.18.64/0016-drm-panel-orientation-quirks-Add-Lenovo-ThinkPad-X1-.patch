@@ -1,7 +1,7 @@
 From 93a3fd68de57dfa7b81ae07c4d1a065f8d4d4bf0 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 06:41:54 +0000
-Subject: [PATCH 16/36] drm: panel-orientation-quirks: Add Lenovo ThinkPad X1
+Subject: [PATCH 16/39] drm: panel-orientation-quirks: Add Lenovo ThinkPad X1
  Fold Gen 1
 
 The 1536x2048 OLED of the ThinkPad X1 Fold Gen 1 is mounted upside

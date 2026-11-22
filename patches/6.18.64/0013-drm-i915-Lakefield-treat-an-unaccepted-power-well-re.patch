@@ -1,7 +1,7 @@
 From fb0472f5d44f71d38965fdafcdeda8b0d3c59058 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 06:23:50 +0000
-Subject: [PATCH 13/36] drm/i915: Lakefield: treat an unaccepted power well
+Subject: [PATCH 13/39] drm/i915: Lakefield: treat an unaccepted power well
  request as an absent gate
 
 Lakefield's PW_2 is fused off (fuse status 0x8d800000 on the ThinkPad X1

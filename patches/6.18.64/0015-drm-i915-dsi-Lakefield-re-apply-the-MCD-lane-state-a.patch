@@ -1,7 +1,7 @@
 From f226af098834c86de316d7567518e76bc9aa0679 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 06:30:30 +0000
-Subject: [PATCH 15/36] drm/i915/dsi: Lakefield: re-apply the MCD lane state
+Subject: [PATCH 15/39] drm/i915/dsi: Lakefield: re-apply the MCD lane state
  after combo PHY init
 
 The ICL combo PHY init also runs while the DSI port is live: at driver
