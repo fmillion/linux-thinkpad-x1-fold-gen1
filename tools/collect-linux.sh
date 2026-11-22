@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Read-only hardware characterization for the ThinkPad X1 Fold Gen 1 under Linux.
 # Run as root. Writes everything into ./fold-collect-<timestamp>/ and tars it.
 # Output contains ACPI tables (including MSDM = Windows license key) — do not publish it.

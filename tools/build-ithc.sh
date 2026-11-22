@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Build the out-of-tree ithc (Intel Touch Host Controller) module against a kernel tree.
 #   tools/build-ithc.sh <kernel-build-dir> [<ithc-src-checkout>] [<install-mod-path>]
 # Tested with github.com/quo/ithc-linux commit 6d53c9c on 6.18.64-fold.

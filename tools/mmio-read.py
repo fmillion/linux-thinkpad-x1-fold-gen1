@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
 """Read 32-bit i915 MMIO registers through the PCI BAR0 sysfs mapping (root).
 usage: mmio-read.py [-d 0000:00:02.0] OFFSET[:COUNT] [name] ...   (hex offsets)"""
 import mmap, os, struct, sys

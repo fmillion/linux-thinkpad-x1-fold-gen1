@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Install the Lakefield Intel SST (AVS) DSP base firmware from this machine's own Windows install.
 #   sudo tools/extract-sst-firmware.sh /path/to/mounted/Windows   (e.g. mounted read-only)
 # Picks the newest intcoed driver package's Fw/dsp_fw_release.bin with FW version >= 10.28.0.5646

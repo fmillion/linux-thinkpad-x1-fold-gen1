@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
 # DO NOT RUN: hard-hung the Fold (unpowered TC PHY). See docs/external-display.md.
 """Dump the Type-C PHY register space 0x168000+tc*0x1000 under each HIP_INDEX window (0-3)
 to tell a TGL Dekel PHY (windowed) from an ICL MG PHY (flat). Writes only HIP_INDEX

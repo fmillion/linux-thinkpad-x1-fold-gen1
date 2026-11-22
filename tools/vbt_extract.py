@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
 """Carve Intel VBT images ($VBT ...) out of a firmware image. Usage: vbt_extract.py <fw.bin> <outdir>"""
 import struct, sys, pathlib
 data = pathlib.Path(sys.argv[1]).read_bytes(); out = pathlib.Path(sys.argv[2]); out.mkdir(parents=True, exist_ok=True)

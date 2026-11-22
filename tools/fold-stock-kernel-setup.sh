@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Bring up ISH / ECLite / keyboard-dock on an *unpatched* distro kernel, at runtime.
 #
 #   sudo tools/fold-stock-kernel-setup.sh <kernel-tree-with-patches/6.18.64-applied>

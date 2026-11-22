@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
 # Install a staged "-fold" kernel on an Arch (GRUB + mkinitcpio) system *alongside*
 # the existing kernels, without regenerating grub.cfg or changing the default entry.
 #
