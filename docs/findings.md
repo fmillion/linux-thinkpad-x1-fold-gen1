@@ -352,3 +352,16 @@ display descriptor → display init skipped), keep simpledrm scanning out the BO
   with **OpenGL ES 3.2 on "Mesa Intel(R) UHD Graphics (JSL)"** (holds renderD128 + card0), atomic
   modesetting on the simpledrm output. User report: desktop correct, responsive scrolling/browsing.
   Persistent setup in `userspace/` (modprobe option, sysfs-ID unit, Plasma env script).
+
+## 13. Permanent test install (external USB SSD, Arch, Plasma 6.8.3) — 2026-11-22
+Applied per `docs/install-checklist.md`. Everything comes up at boot with no manual steps:
+6.18.64-fold, BAT1 + 2× UCSI, 6 IIO sensors incl. hinge, `lenovo-fold-dock`, ISH wakeup enabled,
+i915 render-only + simpledrm, Mesa/iHD ID workarounds active; KWin: OpenGL ES on iris.
+- Note: the `plasma` group pulls in `plasma-bigscreen`; SDDM defaults to that session
+  (alphabetical) → select "Plasma (Wayland)" or remove `plasma-bigscreen`.
+- Lid-close test under KDE (powerdevil handles the lid): suspend 447.7 s → dark wake 449.3 s
+  (ECLite 0x11 power source + 0x0c ×4, on the dock's pass-through charger) → **powerdevil
+  re-suspended after ~10 s** with lid still closed → asleep 203 s → woke on lid open (0x26) to
+  the lock screen. Panel visibly dark while closed (KDE paints it black; OLED pixels off).
+  Remaining cost: ~12 s awake per suspend while on dock power. Possible refinement: treat
+  non-lid ECLite events as dark wakes (Windows does).
