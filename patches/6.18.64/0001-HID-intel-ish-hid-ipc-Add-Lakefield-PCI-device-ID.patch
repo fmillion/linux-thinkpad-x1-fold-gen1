@@ -1,0 +1,46 @@
+From 9d43be2c644a29f142ccfc16122222d4bb643738 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 01:15:21 +0000
+Subject: [PATCH 1/2] HID: intel-ish-hid: ipc: Add Lakefield PCI device ID
+
+Add the PCI ID of the Integrated Sensor Hub found on Intel Lakefield
+(e.g. Lenovo ThinkPad X1 Fold Gen 1, Samsung Galaxy Book S).
+
+The ISH firmware is loaded by the BIOS on this platform. Tested on a
+ThinkPad X1 Fold Gen 1 (BIOS N2PET64W 1.36): four HID sensor hubs
+enumerate (accel, gravity, 2x gyro, relative orientation, hinge and
+Intel custom sensors) and the ECLite ISHTP client appears.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/hid/intel-ish-hid/ipc/hw-ish.h  | 1 +
+ drivers/hid/intel-ish-hid/ipc/pci-ish.c | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/drivers/hid/intel-ish-hid/ipc/hw-ish.h b/drivers/hid/intel-ish-hid/ipc/hw-ish.h
+index 27389971b..be7b39f01 100644
+--- a/drivers/hid/intel-ish-hid/ipc/hw-ish.h
++++ b/drivers/hid/intel-ish-hid/ipc/hw-ish.h
+@@ -26,6 +26,7 @@
+ #define PCI_DEVICE_ID_INTEL_ISH_CML_LP		0x02FC
+ #define PCI_DEVICE_ID_INTEL_ISH_CMP_H		0x06FC
+ #define PCI_DEVICE_ID_INTEL_ISH_EHL_Ax		0x4BB3
++#define PCI_DEVICE_ID_INTEL_ISH_LKF		0x98FC
+ #define PCI_DEVICE_ID_INTEL_ISH_TGL_LP		0xA0FC
+ #define PCI_DEVICE_ID_INTEL_ISH_TGL_H		0x43FC
+ #define PCI_DEVICE_ID_INTEL_ISH_ADL_S		0x7AF8
+diff --git a/drivers/hid/intel-ish-hid/ipc/pci-ish.c b/drivers/hid/intel-ish-hid/ipc/pci-ish.c
+index 51a41a285..edfcb02da 100644
+--- a/drivers/hid/intel-ish-hid/ipc/pci-ish.c
++++ b/drivers/hid/intel-ish-hid/ipc/pci-ish.c
+@@ -73,6 +73,7 @@ static const struct pci_device_id ish_pci_tbl[] = {
+ 	{PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_ISH_CML_LP)},
+ 	{PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_ISH_CMP_H)},
+ 	{PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_ISH_EHL_Ax)},
++	{PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_ISH_LKF)},
+ 	{PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_ISH_TGL_LP)},
+ 	{PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_ISH_TGL_H)},
+ 	{PCI_VDEVICE(INTEL, PCI_DEVICE_ID_INTEL_ISH_ADL_S)},
+-- 
+2.56.1
+

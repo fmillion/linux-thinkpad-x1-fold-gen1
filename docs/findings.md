@@ -217,3 +217,36 @@ WinRT enumeration (interactive session):
 | Bluetooth `INT33E4` | `hci_intel` lacks serdev/variant 0x14 | out-of-tree series exists |
 | Touch/pen THC `98D0` | no in-tree driver | out-of-tree `ithc` |
 
+
+## 9. Linux live-boot results (Arch live USB, kernel 7.2.6-arch2, 2026-11-21)
+Raw collection via `tools/collect-linux.sh` (kept in gitignored `work/linux-collect/`).
+- Display: **simpledrm** on the GOP framebuffer, 1536×2048 XR24 (no i915). SDDM runs on it.
+- Unbound PCI: GPU `9840`, THC `98d0`, ISH `98fc`, HDA/DSP `98c8`, MEI `98e0`, DPTF `9820`,
+  SPI `98ab`/`98a4`, host bridge, LPC.
+- Only `AC` power supply; no battery. `intel-hid` (INT33D5) and `soc_button_array` (ACPI0011 → 2×
+  gpio-keys) bind. Lid switch present (`LID0`).
+- Full SSDT set obtained. `SSDT4` ("LEN009E") defines `\_SB.DEVD`:
+  `GDST` = refresh ECLite 0x162 → `DOST = (KBDT == 1) ? 0 : 1`; `GDSZ` = constant
+  `Package {0, 0x3EE, 0x600, 0x412}`. **There is no `NSMC`** on this machine.
+- `LEN009F` (`\_SB.MSKN`) = 5G modem stub, `_STA` 0 on this SKU.
+- `STME9100` LampArray: 1 lamp, kind 6 (Notification), 1 mm bbox, min update 3 ms.
+
+### 9.1 ISH bring-up — **works with only the PCI ID**
+`echo "8086 98fc" > /sys/bus/pci/drivers/intel_ish_ipc/new_id`: firmware is BIOS-loaded,
+`hid-ish` reports 4 HID devices; IIO: `accel_3d`, `gravity`, 2× `gyro_3d`, `relative_orientation`,
+**`hinge`** (Intel custom sensor `INT-020b` → upstream `hid-sensor-custom-intel-hinge`, channels
+hinge/screen/keyboard), plus ~20 Intel custom sensors (`0x2000e1`, no description strings) and
+unbound `0x20008f`, `0x200035`. One `hid_field_extract() n (192) > 32` warning from hub 0006.
+Hinge reads 0/0/0 so far (TODO: verify with physical posture changes).
+
+### 9.2 ECLite — works with patch 0002
+- With `INT3538` matched: UCSI comes up (2 USB-C source power supplies), but `BAT1._BIF/_BIX`
+  failed: handler returned `-EINVAL` because the driver's 384-byte buffer is smaller than the
+  Fold's 0x1A8 data region (reads at 0x186). Raising `ECL_DATA_OPR_BUFLEN` to 512 (9-bit
+  offset/len in the message header) fixes it.
+- **Battery works**: BAT1 Celxpert `LNV-5B10W13884`, Li-poly, 50.0 Wh design / 48.1 Wh full,
+  20 cycles. (Live test needed a battery rebind because eclite was loaded late.)
+
+### 9.3 Dock driver `drivers/lenovo-fold-dock` — works
+Probe reads `GDSZ`, `GDST`; sysfs `keyboard_docked`, `occlusion`; KOBJ_CHANGE on change.
+Deliberately not `SW_DOCK` (logind would treat "docked" as a docking station and ignore lid close).

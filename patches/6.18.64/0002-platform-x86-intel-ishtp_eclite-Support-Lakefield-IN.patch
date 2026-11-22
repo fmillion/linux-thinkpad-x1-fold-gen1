@@ -1,0 +1,48 @@
+From d68ce6a22a7b6321d13994b6562efad00f03d30b Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 01:15:21 +0000
+Subject: [PATCH 2/2] platform/x86: intel: ishtp_eclite: Support Lakefield
+ (INT3538) ECLite
+
+Lakefield firmware (e.g. Lenovo ThinkPad X1 Fold Gen 1) describes the
+ECLite device as _HID INT3538 rather than INTC1035, with the same
+command (0x9F) and data (0x9E) operation regions. Without a match the
+driver fails with "eclite ACPI device not found" and every
+ECLite-backed ACPI method (battery, AC, lid, keyboard dock state) is
+non-functional.
+
+The Fold's data region is also 0x1A8 bytes and its battery methods read
+beyond the driver's 384-byte limit (e.g. 16 bytes at 0x186), which made
+_BIF/_BIX fail with -EINVAL. The message header encodes offset and
+length in 9 bits, so size the shadow buffer to the full 512-byte space.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/platform/x86/intel/ishtp_eclite.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/platform/x86/intel/ishtp_eclite.c b/drivers/platform/x86/intel/ishtp_eclite.c
+index bca7e2178..62a894662 100644
+--- a/drivers/platform/x86/intel/ishtp_eclite.c
++++ b/drivers/platform/x86/intel/ishtp_eclite.c
+@@ -33,7 +33,7 @@
+ #define ECL_CL_RX_RING_SIZE	16
+ #define ECL_CL_TX_RING_SIZE	8
+ 
+-#define ECL_DATA_OPR_BUFLEN	384
++#define ECL_DATA_OPR_BUFLEN	512	/* 9-bit offset/length in ecl_message_header */
+ #define ECL_EVENTS_NOTIFY	333
+ 
+ #define cmd_opr_offsetof(element)	offsetof(struct opregion_cmd, element)
+@@ -290,6 +290,8 @@ static int acpi_find_eclite_device(struct ishtp_opregion_dev *opr_dev)
+ 
+ 	/* Find ECLite device and save reference */
+ 	adev = acpi_dev_get_first_match_dev("INTC1035", NULL, -1);
++	if (!adev)	/* Lakefield platforms (e.g. ThinkPad X1 Fold Gen 1) */
++		adev = acpi_dev_get_first_match_dev("INT3538", NULL, -1);
+ 	if (!adev) {
+ 		dev_err(cl_data_to_dev(opr_dev), "eclite ACPI device not found\n");
+ 		return -ENODEV;
+-- 
+2.56.1
+
