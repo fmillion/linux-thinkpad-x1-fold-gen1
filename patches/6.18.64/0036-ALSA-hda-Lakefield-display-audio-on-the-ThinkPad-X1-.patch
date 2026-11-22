@@ -1,0 +1,75 @@
+From cee2774cbcc23f860680575a2f715fc054b5b9e9 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 10:42:42 +0000
+Subject: [PATCH 36/36] ALSA: hda: Lakefield display audio on the ThinkPad X1
+ Fold Gen 1
+
+- i915_gfx_present(): Lakefield (8086:9840) is denylisted because i915 did
+  not drive its display; on the X1 Fold Gen 1 it does (with this patch set),
+  so allow the audio component there (DMI).
+- intelhdmi: add the Lakefield display audio codec 8086:2811. It has the TGL
+  layout (pins 0x04-0x0f, 4 devices per pin; DDI D/TC1 = pin 0x0a), so use
+  the TGL model.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ sound/hda/codecs/hdmi/intelhdmi.c |  1 +
+ sound/hda/core/i915.c             | 16 +++++++++++++++-
+ 2 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/sound/hda/codecs/hdmi/intelhdmi.c b/sound/hda/codecs/hdmi/intelhdmi.c
+index 3a942343b..0a26161f6 100644
+--- a/sound/hda/codecs/hdmi/intelhdmi.c
++++ b/sound/hda/codecs/hdmi/intelhdmi.c
+@@ -802,6 +802,7 @@ static const struct hda_device_id snd_hda_id_intelhdmi[] = {
+ 	HDA_CODEC_ID_MODEL(0x8086280c, "Cannonlake HDMI",	MODEL_GLK),
+ 	HDA_CODEC_ID_MODEL(0x8086280d, "Geminilake HDMI",	MODEL_GLK),
+ 	HDA_CODEC_ID_MODEL(0x8086280f, "Icelake HDMI",		MODEL_ICL),
++	HDA_CODEC_ID_MODEL(0x80862811, "Lakefield HDMI",	MODEL_TGL),
+ 	HDA_CODEC_ID_MODEL(0x80862812, "Tigerlake HDMI",	MODEL_TGL),
+ 	HDA_CODEC_ID_MODEL(0x80862814, "DG1 HDMI",		MODEL_TGL),
+ 	HDA_CODEC_ID_MODEL(0x80862815, "Alderlake HDMI",	MODEL_TGL),
+diff --git a/sound/hda/core/i915.c b/sound/hda/core/i915.c
+index 44438c799..634d09403 100644
+--- a/sound/hda/core/i915.c
++++ b/sound/hda/core/i915.c
+@@ -5,6 +5,7 @@
+ 
+ #include <linux/init.h>
+ #include <linux/module.h>
++#include <linux/dmi.h>
+ #include <linux/pci.h>
+ #include <sound/core.h>
+ #include <sound/hdaudio.h>
+@@ -124,6 +125,18 @@ static int i915_component_master_match(struct device *dev, int subcomponent,
+ 	return 0;
+ }
+ 
++/*
++ * Lakefield is on the denylist because i915 did not drive its display. The
++ * ThinkPad X1 Fold Gen 1 patch set makes i915 drive it by default there, and
++ * the display audio (HDMI/DP over USB-C) needs the audio component.
++ */
++static bool i915_lkf_display_audio(struct pci_dev *display_dev)
++{
++	return display_dev->device == 0x9840 &&
++	       dmi_match(DMI_SYS_VENDOR, "LENOVO") &&
++	       dmi_match(DMI_PRODUCT_FAMILY, "ThinkPad X1 Fold Gen 1");
++}
++
+ /* check whether Intel graphics is present and reachable */
+ static int i915_gfx_present(struct pci_dev *hdac_pci)
+ {
+@@ -158,7 +171,8 @@ static int i915_gfx_present(struct pci_dev *hdac_pci)
+ 		    !pci_is_display(display_dev))
+ 			continue;
+ 
+-		if (pci_match_id(denylist, display_dev))
++		if (pci_match_id(denylist, display_dev) &&
++		    !i915_lkf_display_audio(display_dev))
+ 			continue;
+ 
+ 		if (connectivity_check(display_dev, hdac_pci)) {
+-- 
+2.56.1
+

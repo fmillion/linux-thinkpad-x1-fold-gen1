@@ -48,3 +48,20 @@ Not redistributed by this project.
 - Speaker EQ/loudness (Windows uses Dolby + Realtek APOs); compare loudness with Windows.
 - DMIC beamforming/noise suppression (Windows: Fortemedia APO).
 - Suspend/resume audio check.
+
+## Display audio (HDMI/DP over USB-C, with i915.lkf_tc) — patch 0036
+- `snd_soc_avs: i915 init unsuccessful: -19`: `i915_gfx_present()` denylists Lakefield
+  (no i915 display support upstream). Patch 0036 allows it on the X1 Fold Gen 1 (DMI).
+  Consequence: AVS now waits for i915's audio component — fine, i915 drives the display there
+  by default; with `i915.lkf_display=0` the AVS probe would defer.
+- Codec `8086:2811` ("Lakefield HDMI", unknown upstream) has the **TGL layout**: pins
+  0x04,0x06,0x08,0x0a-0x0f, 4 devices each; DDI D (TC1) = pin 0x0a. With the ICL map the ELD
+  landed on pin 0x08 and nothing played. Patch 0036 adds it as `MODEL_TGL`.
+- Silence even with the right pin: the converter had no `DIGEN` (`Digital: KAE`, not
+  `Enabled`) because the card's `IEC958,<n>` switch was off. PipeWire treats the AVS cards with
+  the generic `stereo-fallback` profile, which never switches IEC958 on →
+  `userspace/udev/61-thinkpad-x1-fold-hdmi-audio.rules` turns IEC958,0-2 on at card creation.
+- WirePlumber: both AVS HDA cards are `avs_hdaudio.N` (N varies) → told apart by
+  `alsa.card_name` ("AVS HD-Audio" = Speakers, "AVS HDMI" = "External Display (USB-C DisplayPort)").
+- Verified: tone and Plasma playback on a DELL S2415H via a USB-C→HDMI adapter (ELD: 2ch LPCM
+  32/44.1/48 kHz).

@@ -1,0 +1,6 @@
+# ThinkPad X1 Fold Gen 1 (AVS + i915.lkf_tc): enable the digital outputs of the display-audio
+# card. PipeWire uses its generic "stereo-fallback" profile for the AVS cards, which does not
+# switch "IEC958" on, so the HDMI/DP converter never gets DIGEN and the monitor stays silent.
+# The monitor can land on any of the three HDMI PCMs (dynamic pin assignment).
+SUBSYSTEM=="sound", KERNEL=="controlC*", ATTRS{id}=="HDMI", ATTRS{number}=="?*", \
+  RUN+="/bin/sh -c 'for i in 0 1 2; do /usr/bin/amixer -q -c %n sset IEC958,$i on; done'"
