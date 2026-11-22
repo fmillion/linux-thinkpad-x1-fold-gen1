@@ -30,7 +30,7 @@ graphical sits on **i915 Lakefield + DSI**.
 4. Mesa: iris PCI ID for 0x9840 (if not already present).
 5. Characterize flicker: LACE/ALS (VBT-enabled), FBC, PSR (n/a for DSI video mode), DC states.
 
-## Phase 4 — Audio
+## Phase 4 — Audio — DONE (see docs/audio.md)
 AVS driver on `98C8` with LKF base FW, ALC287 (17aa:22c6) codec quirks, DMIC via NHLT, UCM.
 
 ## Phase 5 — The rest
