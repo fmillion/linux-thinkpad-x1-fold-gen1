@@ -1,7 +1,7 @@
 From f4a71077d2ab1fabbac253d49923336d6c23f340 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 07:07:06 +0000
-Subject: [PATCH 18/19] drm/i915: Lakefield: skip fuse wait for the absent
+Subject: [PATCH 18/20] drm/i915: Lakefield: skip fuse wait for the absent
  PW_2, quiet expected PHY A note
 
 After the PW_2 enable request is not accepted there is no fuse to wait

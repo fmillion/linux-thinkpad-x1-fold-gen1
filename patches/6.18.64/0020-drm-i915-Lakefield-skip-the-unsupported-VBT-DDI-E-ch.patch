@@ -1,0 +1,40 @@
+From ec4b24f5be5c6b000263154dcbc37c8c38e7d6fe Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 07:15:21 +0000
+Subject: [PATCH 20/20] drm/i915: Lakefield: skip the unsupported VBT DDI-E
+ child without a WARN
+
+The Lakefield VBT on the ThinkPad X1 Fold also lists a DDI-E child
+(USB-C DP alt mode) that the EHL-derived port mask does not cover. i915
+already skips it; do so at debug level instead of with a WARN.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_display.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display.c b/drivers/gpu/drm/i915/display/intel_display.c
+index 3f40028e7..cf71ebe24 100644
+--- a/drivers/gpu/drm/i915/display/intel_display.c
++++ b/drivers/gpu/drm/i915/display/intel_display.c
+@@ -7751,6 +7751,17 @@ static bool intel_ddi_crt_present(struct intel_display *display)
+ 
+ bool assert_port_valid(struct intel_display *display, enum port port)
+ {
++	/*
++	 * Lakefield VBTs also list a DDI-E child (USB-C DP alt mode) that the
++	 * EHL-derived port mask does not cover; skip it without a WARN.
++	 */
++	if (to_pci_dev(display->drm->dev)->device == 0x9840 &&
++	    !(DISPLAY_RUNTIME_INFO(display)->port_mask & BIT(port))) {
++		drm_dbg_kms(display->drm, "Lakefield: VBT port %c not supported, skipping\n",
++			    port_name(port));
++		return false;
++	}
++
+ 	return !drm_WARN(display->drm, !(DISPLAY_RUNTIME_INFO(display)->port_mask & BIT(port)),
+ 			 "Platform does not support port %c\n", port_name(port));
+ }
+-- 
+2.56.1
+
