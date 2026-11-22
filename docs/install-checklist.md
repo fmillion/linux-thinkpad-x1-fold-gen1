@@ -45,5 +45,5 @@ i915 GuC/HuC/DMC, later audio/BT)**, a network service and `sshd` enabled.
   full kernel from the series, not only modules.
 
 ## Per-user (Plasma)
-- `userspace/helper/thinkpad-fold-helper` → `~/.local/bin/` (mode 755)
-- `userspace/helper/thinkpad-fold-helper.desktop` → `~/.config/autostart/`
+- `userspace/helper/thinkpad-fold-helper` → `/usr/local/bin/` (mode 755)
+- `userspace/helper/thinkpad-fold-helper.desktop` → `/etc/xdg/autostart/` (absolute Exec: Plasma's systemd autostart does not expand `$HOME`)

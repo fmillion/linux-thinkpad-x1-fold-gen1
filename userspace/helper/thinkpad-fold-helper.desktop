@@ -2,7 +2,7 @@
 Type=Application
 Name=ThinkPad X1 Fold helper
 Comment=Keyboard-dock display mode and screen rotation for the ThinkPad X1 Fold
-Exec=sh -c 'exec "$HOME/.local/bin/thinkpad-fold-helper"'
+Exec=/usr/local/bin/thinkpad-fold-helper
 X-KDE-autostart-phase=2
 OnlyShowIn=KDE;
 NoDisplay=true

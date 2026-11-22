@@ -34,7 +34,7 @@ own auto-rotation stays off so there is a single owner of rotation).
 
 ## Helper (`userspace/helper/`)
 `thinkpad-fold-helper` (Python, stdlib only) + autostart entry. Install:
-`~/.local/bin/thinkpad-fold-helper`, `~/.config/autostart/thinkpad-fold-helper.desktop`.
+`/usr/local/bin/thinkpad-fold-helper`, `/etc/xdg/autostart/thinkpad-fold-helper.desktop`.
 Env overrides: `FOLD_DOCKED_SCALE` (default 1.5), `FOLD_DOCKED_TOUCH_YSCALE` (1.98).
 Uses `kscreen-doctor` (mode/scale/rotation) and `busctl` (KWin touch calibration). Restores the
 pre-dock scale on undock. A manual Plasma rotation while docked gives a rotated partial display
