@@ -106,3 +106,9 @@ program lost), `flip_done timed out`. The earlier successful resumes were with `
 DMC DC3→DC5 / DC5→DC6 counters stay 0 with the panel lit (video-mode DSI never idles), so
 DC5/6 bring nothing. Patch 0021: `max_dc = 0` on Lakefield (DC9 still allowed: runtime/system
 suspend, no DMC).
+- Verified after 0021 (default boot, enable_dc auto → DC9 only): menu sleep and lid sleep both
+  resume with picture. Lid cycle still has the 0x11 dark wake + powerdevil re-suspend, and the
+  screen now comes on at lid open by itself → the earlier "black after lid open" was the DC5/6
+  resume bug, not a KWin policy issue.
+- Remaining notes: one `Atomic update failure on pipe A (scanline start 2048)` at boot (vblank
+  evasion; keep an eye on it re: flicker), `Unclaimed write 0x64834` on suspend (to trace).

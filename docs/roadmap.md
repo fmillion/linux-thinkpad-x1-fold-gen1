@@ -21,7 +21,7 @@ graphical sits on **i915 Lakefield + DSI**.
 2. Optional: HKEY `LEN026A` support in thinkpad_acpi (no-EC mode) for DYTC/platform_profile + hotkeys.
 3. iio-sensor-proxy: pick the correct IMU for rotation (mount matrix via hwdb).
 
-## Phase 3 — Display (largest)
+## Phase 3 — Display (largest) — DONE except docked mode (see docs/dsi-bringup.md)
 1. i915: Lakefield platform enablement (Gen11/ICL-derived display, EHL/JSL-like render),
    based on the Galaxy Book S LKF series; DSI port A with VBT sequences (SN65DSI86 programmed
    by VBT generic writes).
