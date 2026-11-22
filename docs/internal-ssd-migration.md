@@ -19,3 +19,7 @@ Windows on `nvme0n1` (SK hynix 1 TB) was wiped after capturing what we may need
    `efibootmgr -n` (BootNext) for a one-time test boot.
 - Plasma's default idle suspend kicked in during the long copy; use `systemd-inhibit` for long jobs.
 - Same hostname, machine-id, SSH host keys and BT bond as the external install (it is a clone).
+- **Verified 2026-11-22:** booted `Arch-internal` (Boot0002), root `nvme0n1p2` subvol `@`, all
+  subvolumes with `noatime,compress=zstd:1,ssd,discard=async`; i915 display, battery, dock, sensors,
+  AVS audio, touch (ithc IRQ), BT bond all intact; no failed units. BootOrder now 0002 (internal)
+  first, 0001 (external) second as fallback.
