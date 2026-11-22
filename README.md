@@ -126,4 +126,8 @@ More in [`docs/prior-art.md`](docs/prior-art.md).
 - No upstream kernel source: patches against a pinned kernel release.
 - `work/` (gitignored) holds local vendor files, dumps and the kernel tree.
 
-The kernel patches and the driver are GPL-2.0, like the kernel they modify.
+## License
+
+GPL-2.0-only (see [`LICENSE`](LICENSE)), like the kernel the patches modify. This covers the
+patches, the driver, the tools, the configuration and the documentation. Third-party work the
+patches build on keeps its original authorship, as recorded in each patch.
