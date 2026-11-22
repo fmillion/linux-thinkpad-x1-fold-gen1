@@ -292,3 +292,11 @@ Deliberately not `SW_DOCK` (logind would treat "docked" as a docking station and
 
 Patch series now (`patches/6.18.64/`): 0001–0002 upstream backports, 0003 ISH LKF ID,
 0004 ECLite INT3538 + 512-byte buffer, 0005 s2idle early screen off/on (DMI).
+
+## 11. Patched kernel 6.18.64-fold (all patches, Arch linux-lts config) — boot test
+- Boots; with no manual steps: ISH bound, 4 sensor hubs, 6 IIO sensors (incl. hinge), BAT1 +
+  2× UCSI, `lenovo-fold-dock` bound.
+- Ordering issue: `lenovo-fold-dock` probed at 6.2 s, ECLite came up at ~7 s → probe saw stale
+  `DOST`. `ECLT._REG` sets `ECLA` and runs `SDOS` but does **not** `Notify(DEVD)`. Fix: dock
+  driver returns `-EPROBE_DEFER` while `\_SB.ECLT.ECLA == 0` (deferred probes are retried when
+  eclite binds).

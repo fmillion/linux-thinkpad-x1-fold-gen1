@@ -35,6 +35,18 @@ struct fold_dock {
 	bool have_occl;
 };
 
+static bool fold_dock_eclite_ready(void)
+{
+	unsigned long long ecla;
+	acpi_status status;
+
+	status = acpi_evaluate_integer(NULL, "\\_SB.ECLT.ECLA", NULL, &ecla);
+	if (ACPI_FAILURE(status))
+		return true;	/* no ECLite on this platform: nothing to wait for */
+
+	return ecla != 0;
+}
+
 static int fold_dock_eval_gdst(struct fold_dock *fd, int *docked)
 {
 	unsigned long long val;
@@ -177,6 +189,17 @@ static int fold_dock_probe(struct platform_device *pdev)
 		return -ENODEV;
 	if (!acpi_has_method(fd->adev->handle, "GDST"))
 		return -ENODEV;
+
+	/*
+	 * GDST only returns live data once the ECLite operation regions are
+	 * available (\_SB.ECLT.ECLA, set from ECLT._REG when the
+	 * intel_ishtp_eclite driver installs its handlers). Before that it
+	 * returns a stale cached value, and the firmware does not notify DEVD
+	 * when ECLite comes up, so wait for it.
+	 */
+	if (!fold_dock_eclite_ready())
+		return dev_err_probe(&pdev->dev, -EPROBE_DEFER,
+				     "waiting for ECLite\n");
 
 	ret = devm_mutex_init(&pdev->dev, &fd->lock);
 	if (ret)
