@@ -1,7 +1,7 @@
 From a5f3af719360986080cc9d4d9e22bb897bb8c37b Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 11:17:35 +0000
-Subject: [PATCH 38/40] Bluetooth: hci_intel: serdev: host-wake as wake IRQ,
+Subject: [PATCH 38/42] Bluetooth: hci_intel: serdev: host-wake as wake IRQ,
  wakeup capable
 
 The serdev path had no wakeup support: the controller was neither a wakeup

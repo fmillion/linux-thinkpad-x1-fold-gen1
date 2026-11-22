@@ -1,7 +1,7 @@
 From d399ebec17922c6e3d86f4be6097b830a291163b Mon Sep 17 00:00:00 2001
 From: Cai Yu <caiyu7372@gmail.com>
 Date: Sun, 22 Nov 2026 08:31:39 +0000
-Subject: [PATCH 26/40] Bluetooth: hci_intel: add serdev support for the CcP
+Subject: [PATCH 26/42] Bluetooth: hci_intel: add serdev support for the CcP
  controller
 
 The Intel Bluetooth controller on the ThinkPad X1 Fold Gen1 (Lakefield,

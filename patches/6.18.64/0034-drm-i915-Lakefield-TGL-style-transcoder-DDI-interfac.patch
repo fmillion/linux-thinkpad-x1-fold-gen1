@@ -1,7 +1,7 @@
 From 8049e261d11758305a5d1f1b2f191d9c1e0924cf Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 10:26:00 +0000
-Subject: [PATCH 34/40] drm/i915: Lakefield: TGL-style transcoder/DDI interface
+Subject: [PATCH 34/42] drm/i915: Lakefield: TGL-style transcoder/DDI interface
  with i915.lkf_tc
 
 Run 3: the TC PLL now locks, but link training reads the per-port DP_TP_CTL

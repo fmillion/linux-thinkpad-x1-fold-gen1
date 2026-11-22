@@ -1,0 +1,86 @@
+From 116d17bc99e45e4f00b4490deba3cb22784724f9 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 12:00:01 +0000
+Subject: [PATCH 42/42] Bluetooth: hci_intel: serdev: retry the whole setup;
+ keep link state on resume
+
+- The firmware download at the download speed occasionally fails
+  ("command 0xfc09 tx timeout", "Failed to send firmware data"). On serdev,
+  reset the controller, return to the initial link settings and run the
+  setup again (twice at most).
+- The Read Version retry is confirmed: a failing boot shows the answer
+  (04 0e 0d 20 05 fc 00 37 14 ...) right behind stale bytes from the
+  controller's boot, dropped by the out-of-step H4 parser; one reset fixes it.
+- Resume: the LPM resume/host-wake helpers already restore the operational
+  link state (flow control on, as left by intel_set_baudrate()); do not
+  force flow control off afterwards.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/bluetooth/hci_intel.c | 36 +++++++++++++++++++++++++++++++----
+ 1 file changed, 32 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/bluetooth/hci_intel.c b/drivers/bluetooth/hci_intel.c
+index a3897d558..1357d06c6 100644
+--- a/drivers/bluetooth/hci_intel.c
++++ b/drivers/bluetooth/hci_intel.c
+@@ -1205,6 +1205,37 @@ static const struct hci_uart_proto intel_proto = {
+  * recovers.  intel_setup() changes the baudrate itself, once the bootloader is
+  * talking.
+  */
++/*
++ * serdev: the bootloader handshake, the switch to the download speed or the
++ * download itself occasionally fail (stale bytes, a lost speed change). Reset
++ * the controller, go back to the initial link settings and start over.
++ */
++static int intel_serdev_setup(struct hci_uart *hu)
++{
++	struct intel_data *intel = hu->priv;
++	int err, i;
++
++	for (i = 0; ; i++) {
++		err = intel_setup(hu);
++		if (!err || i == INTEL_SETUP_RESETS)
++			return err;
++
++		bt_dev_warn(hu->hdev, "Setup failed (%d), resetting the controller (%d/%d)",
++			    err, i + 1, INTEL_SETUP_RESETS);
++		serdev_device_set_baudrate(hu->serdev, hu->proto->init_speed);
++		serdev_device_set_flow_control(hu->serdev, false);
++		if (!intel_serdev_reset_controller(hu))
++			return err;
++
++		clear_bit(STATE_BOOTLOADER, &intel->flags);
++		clear_bit(STATE_DOWNLOADING, &intel->flags);
++		clear_bit(STATE_FIRMWARE_LOADED, &intel->flags);
++		clear_bit(STATE_FIRMWARE_FAILED, &intel->flags);
++		clear_bit(STATE_LPM_ENABLED, &intel->flags);
++		clear_bit(STATE_TX_ACTIVE, &intel->flags);
++	}
++}
++
+ static const struct hci_uart_proto intel_serdev_proto = {
+ 	.id		= HCI_UART_INTEL,
+ 	.name		= "Intel",
+@@ -1214,7 +1245,7 @@ static const struct hci_uart_proto intel_serdev_proto = {
+ 	.open		= intel_open,
+ 	.close		= intel_close,
+ 	.flush		= intel_flush,
+-	.setup		= intel_setup,
++	.setup		= intel_serdev_setup,
+ 	.set_baudrate	= intel_set_baudrate,
+ 	.recv		= intel_recv,
+ 	.enqueue	= intel_enqueue,
+@@ -1444,9 +1475,6 @@ static int intel_serdev_resume(struct device *dev)
+ 			bt_dev_warn(hu->hdev, "LPM resume failed");
+ 			clear_bit(STATE_SUSPENDED, &intel->flags);
+ 		}
+-		/* back to the link settings of intel_setup() */
+-		serdev_device_set_flow_control(hu->serdev, false);
+-		serdev_device_set_rts(hu->serdev, true);
+ 	}
+ 	percpu_up_read(&hu->proto_lock);
+ 
+-- 
+2.56.1
+

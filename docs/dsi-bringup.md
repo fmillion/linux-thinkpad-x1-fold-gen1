@@ -112,3 +112,14 @@ suspend, no DMC).
   resume bug, not a KWin policy issue.
 - Remaining notes: one `Atomic update failure on pipe A (scanline start 2048)` at boot (vblank
   evasion; keep an eye on it re: flicker), `Unclaimed write 0x64834` on suspend (to trace).
+
+## Idle-time warnings fixed (patch 0041)
+- "Combo PHY A HW state changed unexpectedly" (every display runtime suspend, ~20 s idle): the EHL
+  description made i915 treat PHYs A-C as combo PHYs; on Lakefield only PHY A exists (B/C read
+  all-ones), its procmon registers are absent, and PHY A runs the DSI/MCD state restored by
+  `icl_dsi_lkf_mcd_restore()`, so the ICL DDI-default check cannot match. Lakefield: combo = PHY A
+  only, no procmon programming/check, uninit mismatch logged at debug level (as for TGL/DG1).
+- "Unclaimed write to register 0x64834" (`EDP_PSR_IMR`): the gen8+ display IRQ reset/postinstall
+  touched the eDP transcoder's PSR IMR/IIR on all pre-gen12 parts; Lakefield has no eDP transcoder →
+  only with `TRANSCODER_EDP`.
+- Verified: 3 DPMS-off/runtime-suspend cycles, no warning, no unclaimed access, PHY B/C untouched.

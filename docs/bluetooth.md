@@ -89,3 +89,8 @@ Cause, from ACPI:
   after resume (count stays 0) — harmless, resume sends the LPM wake packet.
 - Open: confirm the setup retry fixes the boot-time failure (it was intermittent: watch for
   "resetting it (1/2)" in dmesg).
+- Patch 0042: the setup retry caught the boot-time failure (answer `04 0e 0d 20 05 fc 00 37 14 …`
+  behind stale bytes `20 00 00 00 03`; one reset fixed it). A different, rarer failure — firmware
+  download at 921600 timing out (`0xfc09 tx timeout`) — is now covered by resetting the controller
+  and re-running the whole setup at 115200. Resume no longer forces flow control off (the LPM
+  helpers restore the operational state: flow control on).

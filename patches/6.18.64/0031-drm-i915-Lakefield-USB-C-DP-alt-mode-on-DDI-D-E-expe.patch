@@ -1,7 +1,7 @@
 From a83bb0bb9c120126a86ae0342f5a4821fe699333 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 09:47:44 +0000
-Subject: [PATCH 31/40] drm/i915: Lakefield: USB-C DP alt mode on DDI D/E
+Subject: [PATCH 31/42] drm/i915: Lakefield: USB-C DP alt mode on DDI D/E
  (experimental, i915.lkf_tc)
 
 Lakefield's Type-C display ports are DDI D (TC1) and DDI E (TC2): ICL-style

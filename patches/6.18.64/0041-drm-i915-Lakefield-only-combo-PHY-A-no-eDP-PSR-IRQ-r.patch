@@ -1,0 +1,102 @@
+From 293903ead1ba46faf76c08297d2509a5b8cef849 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 11:55:26 +0000
+Subject: [PATCH 41/42] drm/i915: Lakefield: only combo PHY A; no eDP PSR IRQ
+ regs without eDP
+
+- Lakefield has a single combo PHY (A, driving the DSI panel); the PHY B/C
+  registers read all-ones, yet the EHL description initialised and checked
+  them on every display power cycle. Its procmon registers are absent too,
+  and PHY A runs the MCD state restored for DSI, so the uninit check
+  ("Combo PHY A HW state changed unexpectedly", every runtime suspend) is
+  reported at debug level as for TGL/DG1.
+- The gen8+ display IRQ reset/postinstall touched EDP_PSR_IMR/IIR on every
+  pre-gen12 part; Lakefield has no eDP transcoder ("Unclaimed write to
+  register 0x64834" on runtime suspend). Only with TRANSCODER_EDP.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_combo_phy.c   | 15 ++++++++++++---
+ drivers/gpu/drm/i915/display/intel_display.c     |  2 ++
+ drivers/gpu/drm/i915/display/intel_display_irq.c |  5 +++--
+ 3 files changed, 17 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_combo_phy.c b/drivers/gpu/drm/i915/display/intel_combo_phy.c
+index c9551b893..344304c35 100644
+--- a/drivers/gpu/drm/i915/display/intel_combo_phy.c
++++ b/drivers/gpu/drm/i915/display/intel_combo_phy.c
+@@ -250,7 +250,9 @@ static bool icl_combo_phy_verify_state(struct intel_display *display,
+ 				     DCC_MODE_SELECT_MASK, RUN_DCC_ONCE);
+ 	}
+ 
+-	ret &= icl_verify_procmon_ref_values(display, phy);
++	/* Lakefield: no procmon registers (all-ones), nothing was programmed */
++	if (!display->platform.lakefield)
++		ret &= icl_verify_procmon_ref_values(display, phy);
+ 
+ 	if (phy_is_master(display, phy)) {
+ 		ret &= check_phy_reg(display, phy, ICL_PORT_COMP_DW8(phy),
+@@ -375,7 +377,8 @@ static void icl_combo_phys_init(struct intel_display *display)
+ 			intel_de_write(display, ICL_PORT_PCS_DW1_GRP(phy), val);
+ 		}
+ 
+-		icl_set_procmon_ref_values(display, phy);
++		if (!display->platform.lakefield)
++			icl_set_procmon_ref_values(display, phy);
+ 
+ 		if (phy_is_master(display, phy))
+ 			intel_de_rmw(display, ICL_PORT_COMP_DW8(phy),
+@@ -402,7 +405,13 @@ static void icl_combo_phys_uninit(struct intel_display *display)
+ 	for_each_combo_phy_reverse(display, phy) {
+ 		if (phy == PHY_A &&
+ 		    !icl_combo_phy_verify_state(display, phy)) {
+-			if (display->platform.tigerlake || display->platform.dg1) {
++			/*
++			 * Lakefield: PHY A runs the DSI panel through the MCD state
++			 * restored by icl_dsi_lkf_mcd_restore(), not the ICL DDI
++			 * defaults this compares against.
++			 */
++			if (display->platform.tigerlake || display->platform.dg1 ||
++			    display->platform.lakefield) {
+ 				/*
+ 				 * A known problem with old ifwi:
+ 				 * https://gitlab.freedesktop.org/drm/intel/-/issues/2411
+diff --git a/drivers/gpu/drm/i915/display/intel_display.c b/drivers/gpu/drm/i915/display/intel_display.c
+index 1f11b7184..355bfe380 100644
+--- a/drivers/gpu/drm/i915/display/intel_display.c
++++ b/drivers/gpu/drm/i915/display/intel_display.c
+@@ -1824,6 +1824,8 @@ bool intel_phy_is_combo(struct intel_display *display, enum phy phy)
+ 		return phy <= PHY_E;
+ 	else if (display->platform.dg1 || display->platform.rocketlake)
+ 		return phy <= PHY_D;
++	else if (display->platform.lakefield)
++		return phy == PHY_A;	/* PHY B/C registers read all-ones */
+ 	else if (display->platform.jasperlake || display->platform.elkhartlake)
+ 		return phy <= PHY_C;
+ 	else if (display->platform.alderlake_p || IS_DISPLAY_VER(display, 11, 12))
+diff --git a/drivers/gpu/drm/i915/display/intel_display_irq.c b/drivers/gpu/drm/i915/display/intel_display_irq.c
+index 21b2a193b..011cd9da2 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_irq.c
++++ b/drivers/gpu/drm/i915/display/intel_display_irq.c
+@@ -2053,7 +2053,8 @@ void gen11_display_irq_reset(struct intel_display *display)
+ 				       TRANS_PSR_IIR(display, trans),
+ 				       0xffffffff);
+ 		}
+-	} else {
++	} else if (HAS_TRANSCODER(display, TRANSCODER_EDP)) {
++		/* not on parts without the eDP transcoder (Lakefield) */
+ 		intel_de_write(display, EDP_PSR_IMR, 0xffffffff);
+ 		intel_de_write(display, EDP_PSR_IIR, 0xffffffff);
+ 	}
+@@ -2304,7 +2305,7 @@ void gen8_de_irq_postinstall(struct intel_display *display)
+ 			intel_display_irq_regs_assert_irr_is_zero(display,
+ 								  TRANS_PSR_IIR(display, trans));
+ 		}
+-	} else {
++	} else if (HAS_TRANSCODER(display, TRANSCODER_EDP)) {
+ 		intel_display_irq_regs_assert_irr_is_zero(display, EDP_PSR_IIR);
+ 	}
+ 
+-- 
+2.56.1
+
