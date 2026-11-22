@@ -277,3 +277,18 @@ Deliberately not `SW_DOCK` (logind would treat "docked" as a docking station and
 - Notify path re-verified (no polling): lift → uevent + "keyboard undocked", place → "docked", 5.8 s apart.
 - s2idle fix implemented as patch 0003 (DMI quirk `lps0_screen_off_early`, screen off/on from
   `.begin`/`.end`). Needs a full kernel build to test (s2idle.c is built-in).
+
+## 10. Stock linux-lts 6.18.64 results (2026-11-22)
+- Baseline identical to 7.2.6: simpledrm, AC only, GPU/ISH/HDA unbound.
+- **ISH on 6.18 needs two upstream backports** beyond the PCI ID. With `new_id` alone the 6.18
+  driver fails: `[ishtp-ish]: Timed out waiting for FW-initiated reset` / `ISH: hw start failed`
+  (reproducible on rebind — not stale state). 6.18 waits for a FW-initiated reset that LKF FW
+  never sends; 7.x instead sends IPC RESET from `ish_wakeup()`. Backported (apply cleanly):
+  - `9e097dc9df80` HID: intel-ish-hid: ipc: Always schedule FW reset work on RESET_NOTIFY/ACK
+  - `507561b00ac2` HID: intel-ish-hid: Use IPC RESET instead of void message in ish_wakeup()
+- With backports + LKF ID + eclite patch + dock module (built against `linux-lts-headers`):
+  BAT1 100 % "Not charging", 2× UCSI, 6 IIO sensors incl. hinge, `keyboard_docked=1`,
+  occlusion `0 1006 1536 1042`. On 6.18 the battery appeared without a manual rebind.
+
+Patch series now (`patches/6.18.64/`): 0001–0002 upstream backports, 0003 ISH LKF ID,
+0004 ECLite INT3538 + 512-byte buffer, 0005 s2idle early screen off/on (DMI).

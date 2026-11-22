@@ -1,0 +1,120 @@
+From 19410e126878357128b32390b63377fc0f34872d Mon Sep 17 00:00:00 2001
+From: Zhang Lixu <lixu.zhang@intel.com>
+Date: Fri, 17 Oct 2025 10:22:16 +0800
+Subject: [PATCH 1/5] HID: intel-ish-hid: ipc: Always schedule FW reset work on
+ RESET_NOTIFY/ACK
+
+commit 9e097dc9df8027a590dbca503d8b52e1a86024d7 upstream.
+
+Both ISH firmware and driver can actively send MNG_RESET_NOTIFY to initiate
+an FW reset handshake. Upon receiving this, the peer should reply with
+MNG_RESET_NOTIFY_ACK. Therefore, the driver should schedule the FW reset
+handshake work function when receiving either MNG_RESET_NOTIFY or
+MNG_RESET_NOTIFY_ACK.
+
+Previously, driver only scheduled the work function on MNG_RESET_NOTIFY.
+This patch ensures the work function is scheduled on both messages, but
+only replies with MNG_RESET_NOTIFY_ACK when receiving MNG_RESET_NOTIFY.
+
+Signed-off-by: Zhang Lixu <lixu.zhang@intel.com>
+Acked-by: Srinivas Pandruvada <srinivas.pandruvada@linux.intel.com>
+Signed-off-by: Jiri Kosina <jkosina@suse.com>
+---
+ drivers/hid/intel-ish-hid/ipc/ipc.c | 39 ++++++++++++++---------------
+ 1 file changed, 19 insertions(+), 20 deletions(-)
+
+diff --git a/drivers/hid/intel-ish-hid/ipc/ipc.c b/drivers/hid/intel-ish-hid/ipc/ipc.c
+index 3692d1db3..e20da9e4f 100644
+--- a/drivers/hid/intel-ish-hid/ipc/ipc.c
++++ b/drivers/hid/intel-ish-hid/ipc/ipc.c
+@@ -481,6 +481,20 @@ static int timed_wait_for_timeout(struct ishtp_device *dev, int condition,
+ 	return ret;
+ }
+ 
++static void ish_send_reset_notify_ack(struct ishtp_device *dev)
++{
++	/* Read reset ID */
++	u32 reset_id = ish_reg_read(dev, IPC_REG_ISH2HOST_MSG) & 0xFFFF;
++
++	/*
++	 * Set HOST2ISH.ILUP. Apparently we need this BEFORE sending
++	 * RESET_NOTIFY_ACK - FW will be checking for it
++	 */
++	ish_set_host_rdy(dev);
++	/* Send RESET_NOTIFY_ACK (with reset_id) */
++	ipc_send_mng_msg(dev, MNG_RESET_NOTIFY_ACK, &reset_id, sizeof(u32));
++}
++
+ #define TIME_SLICE_FOR_FW_RDY_MS		100
+ #define TIME_SLICE_FOR_INPUT_RDY_MS		100
+ #define TIMEOUT_FOR_FW_RDY_MS			2000
+@@ -496,13 +510,9 @@ static int timed_wait_for_timeout(struct ishtp_device *dev, int condition,
+  */
+ static int ish_fw_reset_handler(struct ishtp_device *dev)
+ {
+-	uint32_t	reset_id;
+ 	unsigned long	flags;
+ 	int ret;
+ 
+-	/* Read reset ID */
+-	reset_id = ish_reg_read(dev, IPC_REG_ISH2HOST_MSG) & 0xFFFF;
+-
+ 	/* Clear IPC output queue */
+ 	spin_lock_irqsave(&dev->wr_processing_spinlock, flags);
+ 	list_splice_init(&dev->wr_processing_list, &dev->wr_free_list);
+@@ -521,15 +531,6 @@ static int ish_fw_reset_handler(struct ishtp_device *dev)
+ 	/* Send clock sync at once after reset */
+ 	ishtp_dev->prev_sync = 0;
+ 
+-	/*
+-	 * Set HOST2ISH.ILUP. Apparently we need this BEFORE sending
+-	 * RESET_NOTIFY_ACK - FW will be checking for it
+-	 */
+-	ish_set_host_rdy(dev);
+-	/* Send RESET_NOTIFY_ACK (with reset_id) */
+-	ipc_send_mng_msg(dev, MNG_RESET_NOTIFY_ACK, &reset_id,
+-			 sizeof(uint32_t));
+-
+ 	/* Wait for ISH FW'es ILUP and ISHTP_READY */
+ 	ret = timed_wait_for_timeout(dev, WAIT_FOR_FW_RDY,
+ 				     TIME_SLICE_FOR_FW_RDY_MS,
+@@ -563,8 +564,6 @@ static void fw_reset_work_fn(struct work_struct *work)
+ 	if (!rv) {
+ 		/* ISH is ILUP & ISHTP-ready. Restart ISHTP */
+ 		msleep_interruptible(TIMEOUT_FOR_HW_RDY_MS);
+-		ishtp_dev->recvd_hw_ready = 1;
+-		wake_up_interruptible(&ishtp_dev->wait_hw_ready);
+ 
+ 		/* ISHTP notification in IPC_RESET sequence completion */
+ 		if (!work_pending(work))
+@@ -625,15 +624,14 @@ static void	recv_ipc(struct ishtp_device *dev, uint32_t doorbell_val)
+ 		break;
+ 
+ 	case MNG_RESET_NOTIFY:
+-		if (!ishtp_dev) {
+-			ishtp_dev = dev;
+-		}
+-		queue_work(dev->unbound_wq, &fw_reset_work);
+-		break;
++		ish_send_reset_notify_ack(ishtp_dev);
++		fallthrough;
+ 
+ 	case MNG_RESET_NOTIFY_ACK:
+ 		dev->recvd_hw_ready = 1;
+ 		wake_up_interruptible(&dev->wait_hw_ready);
++		if (!work_pending(&fw_reset_work))
++			queue_work(dev->unbound_wq, &fw_reset_work);
+ 		break;
+ 	}
+ }
+@@ -1005,6 +1003,7 @@ struct ishtp_device *ish_dev_init(struct pci_dev *pdev)
+ 		list_add_tail(&tx_buf->link, &dev->wr_free_list);
+ 	}
+ 
++	ishtp_dev = dev;
+ 	ret = devm_work_autocancel(&pdev->dev, &fw_reset_work, fw_reset_work_fn);
+ 	if (ret) {
+ 		dev_err(dev->devc, "Failed to initialise FW reset work\n");
+-- 
+2.56.1
+
