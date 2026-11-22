@@ -1,0 +1,23 @@
+# Secrets
+.password
+
+# Vendor binaries, dumps, RE intermediates (never commit)
+work/
+*.sys
+*.dll
+*.exe
+*.cat
+*.bin
+*.dat
+*.aml
+*.dsl
+*.gpr
+*.rep
+
+# Firmware blobs (may live in a separate repo)
+firmware/
+
+# Kernel trees / build output
+linux-*/
+*.ko
+*.o
