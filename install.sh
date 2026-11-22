@@ -62,7 +62,9 @@ pacman -Syu --needed --noconfirm base-devel git innoextract python
 work=$(sudo -u "$builder" mktemp -d -t x1fold-install.XXXXXX)
 trap 'rm -rf "$work"' EXIT
 say "Fetching $X1FOLD_GIT ($X1FOLD_REF)"
-sudo -u "$builder" git clone -q --depth 1 --branch "$X1FOLD_REF" "$X1FOLD_GIT" "$work/x1fold"
+# shallow where the server supports it (not over plain/"dumb" HTTP)
+sudo -u "$builder" git clone -q --depth 1 --branch "$X1FOLD_REF" "$X1FOLD_GIT" "$work/x1fold" 2>/dev/null ||
+	sudo -u "$builder" git clone -q --branch "$X1FOLD_REF" "$X1FOLD_GIT" "$work/x1fold"
 
 build() { # build <package dir> -> prints the built package files
 	local d="$work/x1fold/packaging/arch/$1"
