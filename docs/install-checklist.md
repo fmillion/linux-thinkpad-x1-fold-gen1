@@ -56,3 +56,9 @@ i915 GuC/HuC/DMC, later audio/BT)**, a network service and `sshd` enabled.
   bring-up were removed (copy in /var/tmp/40_custom.lkf-tc-tests on the dev install).
 - `userspace/udev/61-thinkpad-x1-fold-hdmi-audio.rules` → `/etc/udev/rules.d/`.
 - `userspace/wireplumber/51-thinkpad-x1-fold.conf` (updated: separate display-audio sink name).
+
+## Optional debug aid
+- `userspace/sysctl/90-thinkpad-x1-fold-lockup-debug.conf` → `/etc/sysctl.d/`: soft/hard lockup →
+  panic → log tail in EFI pstore (`/sys/fs/pstore/` on the next boot), reboot after 10 s. Installed on
+  the dev machine since 2026-11-22 after an unreproduced hard freeze (displays off, adapter
+  unplugged, in a boot with many hci_uart reloads). Remove when no longer needed.
