@@ -1,7 +1,7 @@
 From a4f0451ccb36ddc7010cb5ef18887bbc9f8aaf62 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 11:38:56 +0000
-Subject: [PATCH 40/43] drm/i915: Lakefield: lkf_tc auto, on for the ThinkPad
+Subject: [PATCH 40/44] drm/i915: Lakefield: lkf_tc auto, on for the ThinkPad
  X1 Fold Gen 1
 
 i915.lkf_tc becomes a tri-state like lkf_display: -1 (default) enables the

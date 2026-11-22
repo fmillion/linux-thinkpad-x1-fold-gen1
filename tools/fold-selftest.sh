@@ -4,7 +4,7 @@
 # Hardware self-test for Linux on the ThinkPad X1 Fold Gen 1: run after installing a new kernel /
 # package version, from a logged-in desktop session (some checks use the session's D-Bus).
 #
-#   sudo tools/fold-selftest.sh            # automatic checks
+#   sudo x1fold-selftest (packaged) or sudo tools/fold-selftest.sh   # automatic checks
 #   sudo tools/fold-selftest.sh --suspend  # also one 20 s s2idle cycle (rtcwake)
 #
 # Prints PASS/WARN/FAIL per check and a summary; exits non-zero on any FAIL. Checks that need a

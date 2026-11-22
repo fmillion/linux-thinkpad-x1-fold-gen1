@@ -1,7 +1,7 @@
 From 9858736cd3ecebe6c46537e1b285dded68d3887c Mon Sep 17 00:00:00 2001
 From: Cai Yu <caiyu7372@gmail.com>
 Date: Sat, 26 Sep 2026 07:40:43 +0800
-Subject: [PATCH 27/43] Bluetooth: hci_intel: download the CcP firmware at
+Subject: [PATCH 27/44] Bluetooth: hci_intel: download the CcP firmware at
  921.6 kbaud
 
 The CcP bootloader stops acknowledging firmware fragments when the image

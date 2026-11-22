@@ -1,7 +1,7 @@
 From 8085c9e740795b00a808a92c0351c98dfa1ee8f5 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 09:04:04 +0000
-Subject: [PATCH 30/43] Bluetooth: hci_intel: CcP: mark LE Coded as broken
+Subject: [PATCH 30/44] Bluetooth: hci_intel: CcP: mark LE Coded as broken
 
 Scanning on LE Coded and LE 1M simultaneously starves the 1M scan with
 the CcP (hardware variant 0x14) firmware on the ThinkPad X1 Fold Gen 1:

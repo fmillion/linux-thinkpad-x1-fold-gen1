@@ -1,7 +1,7 @@
 From d346171377f406e933ea8645b84d947c2cd93d87 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 12:00:01 +0000
-Subject: [PATCH 42/43] Bluetooth: hci_intel: serdev: retry the whole setup;
+Subject: [PATCH 42/44] Bluetooth: hci_intel: serdev: retry the whole setup;
  keep link state on resume
 
 - The firmware download at the download speed occasionally fails

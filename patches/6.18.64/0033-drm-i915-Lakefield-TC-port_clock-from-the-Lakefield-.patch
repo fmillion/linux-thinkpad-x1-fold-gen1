@@ -1,7 +1,7 @@
 From 389652f9eade70abedab4636f8ca3312d6deeaf5 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 10:10:41 +0000
-Subject: [PATCH 33/43] drm/i915: Lakefield: TC port_clock from the Lakefield
+Subject: [PATCH 33/44] drm/i915: Lakefield: TC port_clock from the Lakefield
  PLL table
 
 icl_compute_tc_phy_dplls() decodes port_clock with the ICL MG decoder

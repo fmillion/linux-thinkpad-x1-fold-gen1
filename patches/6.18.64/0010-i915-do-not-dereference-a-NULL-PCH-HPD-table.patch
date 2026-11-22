@@ -1,7 +1,7 @@
 From e9dc80e8c84585dc420f95af74728ba8126f2148 Mon Sep 17 00:00:00 2001
 From: Lakefield kernel fixes <lakefield@example.invalid>
 Date: Tue, 17 Nov 2026 05:08:46 -0300
-Subject: [PATCH 10/43] i915: do not dereference a NULL PCH HPD table
+Subject: [PATCH 10/44] i915: do not dereference a NULL PCH HPD table
 
 On a PCH-less Gen11+ SoC, intel_hotplug_irq_init() assigns hpd_gen11 but
 returns before filling in hotplug.pch_hpd. DDI init still publishes

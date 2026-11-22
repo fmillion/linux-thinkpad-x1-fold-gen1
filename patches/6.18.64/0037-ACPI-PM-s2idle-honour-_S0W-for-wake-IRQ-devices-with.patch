@@ -1,7 +1,7 @@
 From 3377fc56357ef99f203b838a8690030360b99965 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 11:17:33 +0000
-Subject: [PATCH 37/43] ACPI: PM: s2idle: honour _S0W for wake-IRQ devices
+Subject: [PATCH 37/44] ACPI: PM: s2idle: honour _S0W for wake-IRQ devices
  without that D-state
 
 acpi_dev_pm_get_state() falls back to D3cold when _SxW returns a D-state the

@@ -3,7 +3,7 @@
 # Local/CI builds from a checkout: X1FOLD_REPO="git+file://$PWD/../../.." makepkg
 
 pkgname=x1fold-hwconfig
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc='Hardware configuration for the ThinkPad X1 Fold Gen 1 (udev, modprobe, PipeWire, GPU ID)'
 arch=(any)
@@ -22,6 +22,7 @@ depends=(
 )
 optdepends=(
   'linux-x1fold: the patched kernel this configuration is made for'
+  'libva-utils: VA-API check in x1fold-selftest'
 )
 makedepends=(git)
 _x1fold_repo=${X1FOLD_REPO:-git+https://github.com/fmillion/linux-thinkpad-x1-fold-gen1.git}
@@ -49,6 +50,9 @@ package() {
   install -dm755 "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
   ln -s ../thinkpad-x1-fold-gpu-id.service \
     "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/thinkpad-x1-fold-gpu-id.service"
+
+  # hardware self-test (run after kernel/package updates)
+  install -Dm755 ../tools/fold-selftest.sh "$pkgdir/usr/bin/x1fold-selftest"
 
   # optional debug aid, not active: copy to /etc/sysctl.d/ to enable
   install -Dm644 -t "$pkgdir/usr/share/doc/$pkgname" sysctl/90-thinkpad-x1-fold-lockup-debug.conf

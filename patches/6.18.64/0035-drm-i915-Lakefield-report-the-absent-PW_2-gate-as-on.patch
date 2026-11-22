@@ -1,7 +1,7 @@
 From dcf4889da2a6130eb2d3b6c51ea191ffc63da597 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 10:34:37 +0000
-Subject: [PATCH 35/43] drm/i915: Lakefield: report the absent PW_2 gate as on
+Subject: [PATCH 35/44] drm/i915: Lakefield: report the absent PW_2 gate as on
  with lkf_tc
 
 Run 4: link training passes and transcoder B runs (TRANSCONF B active, frame

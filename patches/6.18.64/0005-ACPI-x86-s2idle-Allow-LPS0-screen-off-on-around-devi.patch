@@ -1,7 +1,7 @@
 From d00e0e4bee6db5ceaff6a99a64e70b8dde949aff Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 01:29:34 +0000
-Subject: [PATCH 05/43] ACPI: x86: s2idle: Allow LPS0 screen off/on around
+Subject: [PATCH 05/44] ACPI: x86: s2idle: Allow LPS0 screen off/on around
  device suspend
 
 On the Lenovo ThinkPad X1 Fold Gen 1 the LPS0 "screen off" and

@@ -1,7 +1,7 @@
 From 54c4172a3162ad6348dd85c57d7f33ae61a62c15 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 07:07:11 +0000
-Subject: [PATCH 19/43] drm/i915: Lakefield: own display descriptor, enable
+Subject: [PATCH 19/44] drm/i915: Lakefield: own display descriptor, enable
  display on validated machines
 
 Use a Lakefield display descriptor (EHL code paths) without the eDP

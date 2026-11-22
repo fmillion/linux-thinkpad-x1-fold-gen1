@@ -1,0 +1,32 @@
+From e08d7455188956211869dc5e46a04e6476b502f5 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 23:10:51 +0000
+Subject: [PATCH 44/44] drm/i915: Lakefield: no DSC
+
+i915 takes VDSC from the ICL description and the DFSM fuse does not report it
+disabled, but the Lakefield DSS registers are unclaimed: with the PW_2 gate
+reported on (USB-C DP), the DSC state readout after a commit hits them
+("Unclaimed read from register 0x67400" from intel_dsc_get_config()).
+Clear has_dsc in the Lakefield descriptor.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_display_device.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_display_device.c b/drivers/gpu/drm/i915/display/intel_display_device.c
+index bbe05cdab..ced03a9a5 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_device.c
++++ b/drivers/gpu/drm/i915/display/intel_display_device.c
+@@ -965,6 +965,8 @@ static const struct intel_display_device_info lkf_display = {
+ 	ICL_DISPLAY,
+ 
+ 	.__runtime_defaults.port_mask = BIT(PORT_A) | BIT(PORT_B) | BIT(PORT_C) | BIT(PORT_D),
++	/* no VDSC: the pipe A DSS registers are unclaimed (not fused off in DFSM) */
++	.__runtime_defaults.has_dsc = 0,
+ 	.__runtime_defaults.cpu_transcoder_mask =
+ 		BIT(TRANSCODER_A) | BIT(TRANSCODER_B) | BIT(TRANSCODER_C) |
+ 		BIT(TRANSCODER_DSI_0) | BIT(TRANSCODER_DSI_1),
+-- 
+2.56.1
+
