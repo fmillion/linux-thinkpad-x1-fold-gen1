@@ -1,3 +1,6 @@
+> **Note:** the packages in `packaging/` (and `install.sh`) replace these manual steps. This file
+> documents how the reference machine was set up by hand.
+
 # Applying the Fold patches to a fresh Arch install
 
 Done on 2026-11-22 for the external USB SSD install (`sdb`, mounted at `/mnt` from the live USB).
@@ -10,7 +13,8 @@ i915 GuC/HuC/DMC, later audio/BT)**, a network service and `sshd` enabled.
 
 ## Kernel (`6.18.64-fold`)
 1. Copy the module tree: `/usr/lib/modules/6.18.64-fold` (no `build`/`source` links), including
-   `updates/i915.ko.zst` (patch 0006 build) and `updates/lenovo-fold-dock.ko.zst`.
+   `updates/i915.ko.zst` (patch 0006 build) and `updates/lenovo-fold-dock.ko.zst` (since patch 0043 the
+   dock driver is part of the kernel tree: `CONFIG_LENOVO_FOLD_DOCK=m`).
 2. `/boot/vmlinuz-linux-fold`.
 3. `/etc/mkinitcpio.d/linux-fold.preset`:
    ```

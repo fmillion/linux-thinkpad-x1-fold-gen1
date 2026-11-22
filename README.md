@@ -1,6 +1,6 @@
 # Linux on the Lenovo ThinkPad X1 Fold Gen 1
 
-Kernel patches, a small platform driver and userspace configuration that make Linux a
+Kernel patches, packages and userspace configuration that make Linux a
 fully usable daily system on the **ThinkPad X1 Fold Gen 1** (2020, machine types 20RK/20RL,
 Intel Lakefield i5-L16G7) — including the foldable OLED panel, the magnetic Bluetooth keyboard
 dock, touch, audio and USB-C external displays.
@@ -10,8 +10,8 @@ project is reverse engineering: the BIOS's own graphics driver (GOP), the VBT, t
 and register state, documented in [`docs/`](docs/).
 
 - **Kernel:** Linux **6.18.64 LTS**, as a patch series against the pristine release
-  ([`patches/6.18.64/`](patches/6.18.64/), 42 patches)
-- **Out-of-tree driver:** [`drivers/lenovo-fold-dock`](drivers/lenovo-fold-dock/) (keyboard-dock state)
+  ([`patches/6.18.64/`](patches/6.18.64/), 43 patches, including the keyboard-dock driver)
+- **Packages:** Arch Linux PKGBUILDs and an installer ([`packaging/`](packaging/), [`install.sh`](install.sh))
 - **Userspace:** udev, PipeWire/WirePlumber, SDDM and a Plasma helper ([`userspace/`](userspace/))
 - **Tested on:** 20RK000LUS, BIOS N2PET64W (1.36), Arch Linux, KDE Plasma 6 (Wayland)
 
@@ -53,31 +53,28 @@ and register state, documented in [`docs/`](docs/).
 - **Dock mode:** `lenovo-fold-dock` exposes the keyboard-dock state from ACPI; the helper switches
   between the full panel and the docked mode. See [`docs/dock-mode.md`](docs/dock-mode.md).
 
-## Installation
+## Installation (Arch Linux)
 
-Rough outline for Arch Linux; the full checklist (and how this was done on the reference machine)
-is in [`docs/install-checklist.md`](docs/install-checklist.md).
+On a freshly installed Arch Linux on the Fold, with a USB keyboard and a network connection:
 
-1. **Kernel.** Patch, configure and build a 6.18.64 kernel:
-   ```sh
-   tar xf linux-6.18.64.tar.xz && cd linux-6.18.64
-   git init -q && git add -A && git commit -qm base
-   git am ../patches/6.18.64/*.patch
-   cp /path/to/arch-linux-lts.config .config     # e.g. from /proc/config.gz on linux-lts
-   scripts/config --set-str LOCALVERSION -fold --disable LOCALVERSION_AUTO
-   make olddefconfig && make -j"$(nproc)"
-   sudo make modules_install && sudo cp arch/x86/boot/bzImage /boot/vmlinuz-linux-fold
-   ```
-   Then an mkinitcpio preset and a GRUB entry for `linux-fold` (see the checklist).
-2. **Out-of-tree modules.** `drivers/lenovo-fold-dock` (`make KDIR=<kernel tree>`) and ithc
-   (`tools/build-ithc.sh`), installed to `/usr/lib/modules/<release>/updates/`.
-3. **Firmware.** `linux-firmware` (Wi-Fi, i915 DMC/GuC/HuC, Bluetooth `intel/ibt-20-1-3.*`) and the
-   Intel SST DSP firmware for audio, taken from the machine's Windows audio driver package
-   (`tools/extract-sst-firmware.sh`; not redistributed here).
-4. **Userspace.** Copy the files from [`userspace/`](userspace/) as listed in
-   [`userspace/README.md`](userspace/README.md).
-5. **Pair the keyboard.** It needs passkey entry and doesn't appear in Plasma's device list; pair
-   it with `bluetoothctl` (see [`docs/bluetooth.md`](docs/bluetooth.md#pairing-the-fold-mini-keyboard)).
+```sh
+curl -fsSL https://raw.githubusercontent.com/fmillion/linux-thinkpad-x1-fold-gen1/main/install.sh | sudo bash
+```
+
+The installer builds and installs the packages, makes the patched kernel the default boot entry
+and explains how to pair the keyboard after the reboot. Without a binary repository it builds the
+kernel from source, which takes hours on the Fold itself. See [`packaging/README.md`](packaging/README.md)
+for the packages and the options, and [`docs/install-checklist.md`](docs/install-checklist.md) for
+a manual installation.
+
+| Package | Contents |
+|---|---|
+| `x1fold` | Metapackage: everything below except the Plasma integration |
+| `linux-x1fold`, `linux-x1fold-headers` | Linux 6.18.64 LTS (Arch's `linux-lts` config) with the patch series |
+| `linux-x1fold-ithc` | Touch screen driver, built with the kernel |
+| `x1fold-sst-firmware` | Intel audio DSP firmware, extracted from Lenovo's public driver package at build time |
+| `x1fold-hwconfig` | udev, modprobe, PipeWire/WirePlumber configuration, GPU ID workaround |
+| `x1fold-plasma` | KDE Plasma: keyboard-dock display mode, rotation, Wayland SDDM greeter |
 
 Kernel parameters to rule things out when debugging: `i915.lkf_display=0` (panel on the firmware
 framebuffer, GPU render-only), `i915.lkf_tc=0` (USB-C display ports off), `module_blacklist=i915`.
@@ -93,7 +90,8 @@ framebuffer, GPU render-only), `i915.lkf_tc=0` (USB-C display ports off), `modul
 | [`docs/bluetooth.md`](docs/bluetooth.md) | CcP over serdev, LE Coded, pairing, suspend/wake |
 | [`docs/dock-mode.md`](docs/dock-mode.md) | Keyboard-dock detection and docked display mode |
 | [`docs/touch.md`](docs/touch.md) | Touch controller and calibration |
-| [`docs/install-checklist.md`](docs/install-checklist.md) | Step-by-step installation |
+| [`packaging/README.md`](packaging/README.md) | Packages, installer, building |
+| [`docs/install-checklist.md`](docs/install-checklist.md) | Manual installation |
 | [`docs/prior-art.md`](docs/prior-art.md) | Related projects and references |
 | [`docs/roadmap.md`](docs/roadmap.md) | Original plan, in dependency order |
 
@@ -120,14 +118,15 @@ More in [`docs/prior-art.md`](docs/prior-art.md).
 
 ## Repository policy
 
-- Only this project's own work: patches, drivers, tools, configuration and documentation.
+- Only this project's own work: patches, packaging, tools, configuration and documentation.
 - No vendor binaries, driver files, firmware or dumps. Firmware the hardware needs is obtained
-  from its original source and documented, never committed.
+  from its original source and documented, never committed (`x1fold-sst-firmware` downloads it
+  from Lenovo when it is built).
 - No upstream kernel source: patches against a pinned kernel release.
 - `work/` (gitignored) holds local vendor files, dumps and the kernel tree.
 
 ## License
 
 GPL-2.0-only (see [`LICENSE`](LICENSE)), like the kernel the patches modify. This covers the
-patches, the driver, the tools, the configuration and the documentation. Third-party work the
+patches, the packaging, the tools, the configuration and the documentation. Third-party work the
 patches build on keeps its original authorship, as recorded in each patch.

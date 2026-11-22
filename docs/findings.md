@@ -247,7 +247,7 @@ Hinge reads 0/0/0 so far (TODO: verify with physical posture changes).
 - **Battery works**: BAT1 Celxpert `LNV-5B10W13884`, Li-poly, 50.0 Wh design / 48.1 Wh full,
   20 cycles. (Live test needed a battery rebind because eclite was loaded late.)
 
-### 9.3 Dock driver `drivers/lenovo-fold-dock` — works
+### 9.3 Dock driver `lenovo-fold-dock` (now in-tree: patch 0043) — works
 Probe reads `GDSZ`, `GDST`; sysfs `keyboard_docked`, `occlusion`; KOBJ_CHANGE on change.
 Deliberately not `SW_DOCK` (logind would treat "docked" as a docking station and ignore lid close).
 
