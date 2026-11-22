@@ -28,6 +28,9 @@ i915 GuC/HuC/DMC, later audio/BT)**, a network service and `sshd` enabled.
    `tools/build-ithc.sh <kernel-tree> <ithc-checkout> <stage>`; copy `updates/ithc.ko*`; `depmod`.
    Needs patch 0022 in the kernel image (otherwise only `options ithc poll` works).
 
+7. Audio firmware: mount the machine's Windows partition read-only and run
+   `tools/extract-sst-firmware.sh <mountpoint>` (installs to `updates/intel/avs/lkf/`).
+
 ## Userspace (`userspace/`)
 - `udev/60-thinkpad-x1-fold.rules` → `/etc/udev/rules.d/`
 - `modprobe.d/thinkpad-x1-fold-i915.conf` → `/etc/modprobe.d/`

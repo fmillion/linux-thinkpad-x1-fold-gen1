@@ -7,6 +7,9 @@ Install these on a system running a kernel with `patches/6.18.64` applied.
 | `udev/60-thinkpad-x1-fold.rules` | `/etc/udev/rules.d/` | ISH may wake the system (lid open, ECLite events) |
 | `modprobe.d/thinkpad-x1-fold-i915.conf` | `/etc/modprobe.d/` | `i915.lkf_chipset_id=0x4e71` so intel-media-driver (VA-API) accepts the GPU |
 | `systemd/thinkpad-x1-fold-gpu-id.service` | `/etc/systemd/system/` (enable) | Presents PCI ID 0x4e71 in sysfs so Mesa accepts the GPU (interim) |
+| `modprobe.d/thinkpad-x1-fold-audio.conf` | `/etc/modprobe.d/` | AVS audio driver (needs SST firmware: `tools/extract-sst-firmware.sh`) |
+| `wireplumber/51-thinkpad-x1-fold.conf` | `/etc/wireplumber/wireplumber.conf.d/` | stable DMIC node name, hide codec input, "Speakers" |
+| `pipewire/51-thinkpad-x1-fold-mic.conf` | `/etc/pipewire/pipewire.conf.d/` | "Built-in Microphones": 4 DMICs → mono, +18 dB, default source |
 | `sddm/10-thinkpad-x1-fold-wayland.conf` | `/etc/sddm.conf.d/` | Wayland (KWin) greeter: correct cursor on the upside-down panel |
 | `plasma/thinkpad-x1-fold-gpu.sh` | `~/.config/plasma-workspace/env/` | **Only for render-only mode** (`i915.lkf_display=0`): KWin renders on i915, scans out via simpledrm |
 
@@ -18,3 +21,5 @@ DC states), `module_blacklist=i915` (no GPU driver at all).
 
 If KWin shows the desktop upside down, it has a stale saved output config from simpledrm
 sessions: `kscreen-doctor output.DSI-1.rotation.inverted` (or System Settings → Display).
+
+Audio: also set `amixer -c DMIC cset numid=1 2147483647` once and `alsactl store` (see docs/audio.md).
