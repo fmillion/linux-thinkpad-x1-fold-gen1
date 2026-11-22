@@ -32,6 +32,10 @@ Not redistributed by this project.
   `alsactl store`. Start-up transient in the first ~0.5 s. Noise floor ≈ −75 dBFS; speech at
   normal distance ≈ −47 dBFS RMS / −30 dBFS peak per mic. +18 dB → clear.
 
+- **PipeWire picks S32_LE (24-in-32) by default → static, no speech.** The 16-bit DMIC path
+  (what `arecord -f S16_LE` used) is clean. The WirePlumber rule pins the raw DMIC node to
+  `audio.format = S16LE`, 48 kHz, 4 ch.
+
 ## Persistent configuration (`userspace/`)
 - `modprobe.d/thinkpad-x1-fold-audio.conf`: `snd_intel_dspcfg dsp_driver=4`.
 - `wireplumber/51-thinkpad-x1-fold.conf`: stable node name `thinkpad_fold_dmic_raw` for the DMIC,
