@@ -250,3 +250,27 @@ Hinge reads 0/0/0 so far (TODO: verify with physical posture changes).
 ### 9.3 Dock driver `drivers/lenovo-fold-dock` — works
 Probe reads `GDSZ`, `GDST`; sysfs `keyboard_docked`, `occlusion`; KOBJ_CHANGE on change.
 Deliberately not `SW_DOCK` (logind would treat "docked" as a docking station and ignore lid close).
+
+### 9.4 Dock events end-to-end (live, eclite dyndbg)
+- Each keyboard place/lift → ECLite **event 0x2B** over ISHTP → `intel_ishtp_eclite` evaluates
+  `ECLT._DSM(91d936a7-…, rev 0, fn 43)` → `SDOS` → `Notify(\_SB.DEVD, 0x01)`.
+- Bug found in first driver draft: registered `ACPI_DEVICE_NOTIFY` (≥0x80 only); `0x01` (Device
+  Check) is a *system* notify. Fixed with `ACPI_ALL_NOTIFY` (devm). Polling `GDST` confirmed the
+  state flips correctly (1→0→1→0→1 for two lift/place cycles).
+- Periodic ECLite event `0x0F` (fn 15) every ~1–5 s (battery/thermal refresh; harmless).
+
+### 9.5 s2idle and ECLite
+- Suspend/resume (s2idle) works, but `PEPD._DSM` LPS0 **fn 3 (Screen Off)** / **fn 4 (Screen On)**
+  each issue ECLite writes (`PLON` @0x15B, `HLCL` @0x14E = 0xA0 / 0x80) and `SDOS`; on Linux they
+  time out (`[ish_rd] No response from firmware`, 2 s each) because Linux runs them from
+  `acpi_s2idle_prepare_late()` / `restore_early()`, i.e. after `suspend_noirq`, when the ISH
+  interrupt is masked. Windows sends display-off long before device suspend.
+- Fix plan: DMI-quirked early LPS0 screen-off (in `.begin`) / late screen-on (in `.end`) for this
+  machine, so ECLite still answers. Effect today: EC never learns we are in standby (power LED /
+  standby behaviour) + ~4 s added to suspend/resume.
+
+### 9.6 Hinge sensor
+- Buffered read (trigger `hinge-dev5`, 10 Hz, on-change): channels `le:s16/32` (mask to 16 bits).
+  Sample at ~100° open: **hinge 102°, screen 106–107°, keyboard 4°**. Units: degrees
+  (scale 0.01745 rad). One-shot `in_angl*_raw` returns 0 (sync GET_REPORT not answered for this
+  sensor) — use buffers.

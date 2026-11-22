@@ -115,6 +115,13 @@ static ssize_t keyboard_docked_show(struct device *dev,
 	struct fold_dock *fd = dev_get_drvdata(dev);
 	int docked;
 
+	/*
+	 * Re-read the state so the attribute is correct even if a firmware
+	 * notification was missed (e.g. across suspend or before ECLite was
+	 * ready). This also emits the change notification if it changed.
+	 */
+	fold_dock_update(fd);
+
 	mutex_lock(&fd->lock);
 	docked = fd->docked;
 	mutex_unlock(&fd->lock);
@@ -184,8 +191,12 @@ static int fold_dock_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	ret = acpi_dev_install_notify_handler(fd->adev, ACPI_DEVICE_NOTIFY,
-					      fold_dock_notify, fd);
+	/*
+	 * The firmware uses Notify(DEVD, 0x01), a *system* notification
+	 * (< 0x80), so a device-notify-only handler would never see it.
+	 */
+	ret = devm_acpi_install_notify_handler(&pdev->dev, ACPI_ALL_NOTIFY,
+					       fold_dock_notify, fd);
 	if (ret)
 		return ret;
 
@@ -193,14 +204,6 @@ static int fold_dock_probe(struct platform_device *pdev)
 		 fd->docked ? "docked" : "not docked",
 		 fd->occl[2], fd->occl[3], fd->occl[0], fd->occl[1]);
 	return 0;
-}
-
-static void fold_dock_remove(struct platform_device *pdev)
-{
-	struct fold_dock *fd = platform_get_drvdata(pdev);
-
-	acpi_dev_remove_notify_handler(fd->adev, ACPI_DEVICE_NOTIFY,
-				       fold_dock_notify);
 }
 
 static int fold_dock_resume(struct device *dev)
@@ -225,7 +228,6 @@ static struct platform_driver fold_dock_driver = {
 		.pm = pm_sleep_ptr(&fold_dock_pm),
 	},
 	.probe = fold_dock_probe,
-	.remove = fold_dock_remove,
 };
 module_platform_driver(fold_dock_driver);
 
