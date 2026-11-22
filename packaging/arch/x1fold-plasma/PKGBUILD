@@ -3,7 +3,7 @@
 # Local/CI builds from a checkout: X1FOLD_REPO="git+file://$PWD/../../.." makepkg
 
 pkgname=x1fold-plasma
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc='KDE Plasma integration for the ThinkPad X1 Fold Gen 1 (keyboard dock mode, rotation, SDDM)'
 arch=(any)
@@ -31,5 +31,7 @@ package() {
   sed 's|^Exec=.*|Exec=/usr/bin/thinkpad-fold-helper|' helper/thinkpad-fold-helper.desktop |
     install -Dm644 /dev/stdin "$pkgdir/etc/xdg/autostart/thinkpad-fold-helper.desktop"
   install -Dm644 -t "$pkgdir/usr/lib/sddm/sddm.conf.d" sddm/10-thinkpad-x1-fold-wayland.conf
+  install -Dm644 helper/thinkpad-fold-helper.conf.example \
+    "$pkgdir/usr/share/doc/$pkgname/thinkpad-fold-helper.conf.example"
   install -Dm644 ../LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

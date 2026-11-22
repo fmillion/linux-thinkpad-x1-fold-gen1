@@ -41,3 +41,11 @@ pre-dock scale on undock. A manual Plasma rotation while docked gives a rotated 
 (no corruption); the helper re-asserts on the next dock change.
 Verified 2026-11-22: rotation in all four orientations, touch correct in rotated orientations,
 dock/undock switching.
+
+## Configurable docked height (patch 0045)
+The kernel accepts docked modes 1536 × 900..1100 (same refresh as the panel; scanned out 1:1 at the
+top edge by the pipe scaler) and advertises 1006, the firmware's keyboard edge. The helper reads
+`docked_height` from `~/.config/thinkpad-fold-helper.conf` (example in
+`/usr/share/doc/x1fold-plasma/`) on every docking; for other heights it adds a KWin custom mode
+(`kscreen-doctor output.DSI-1.addCustomMode.1536.<h>.60000.reduced`) and scales the touch mapping
+(y factor 1.98 × 1006 / h). Lower values keep the taskbar off the curved fold.

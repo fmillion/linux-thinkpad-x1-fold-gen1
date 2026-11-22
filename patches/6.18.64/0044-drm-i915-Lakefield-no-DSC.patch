@@ -1,7 +1,7 @@
 From e08d7455188956211869dc5e46a04e6476b502f5 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 23:10:51 +0000
-Subject: [PATCH 44/44] drm/i915: Lakefield: no DSC
+Subject: [PATCH 44/45] drm/i915: Lakefield: no DSC
 
 i915 takes VDSC from the ICL description and the DFSM fuse does not report it
 disabled, but the Lakefield DSS registers are unclaimed: with the PW_2 gate

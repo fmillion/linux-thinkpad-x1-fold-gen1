@@ -4,13 +4,20 @@
 thinkpad-fold-helper: keyboard-dock and rotation policy for the Lenovo ThinkPad X1 Fold Gen 1
 on KDE Plasma (Wayland). Runs inside the user's Plasma session (autostart).
 
-  keyboard docked on the screen  -> 1536x1006 docked mode, docked scale, fixed orientation,
+  keyboard docked on the screen  -> 1536xH docked mode (H = docked_height, default 1006),
+                                    docked scale, fixed orientation,
                                     touch mapped to the visible area, accelerometer ignored
   keyboard not docked            -> full 1536x2048 panel, previous scale, rotation follows the
                                     accelerometer, normal touch mapping
 
 Needs: patches/6.18.64 (lenovo-fold-dock driver, i915 docked mode), kscreen-doctor, busctl.
 Standard library only.
+
+Settings (~/.config/thinkpad-fold-helper.conf, "key = value"; environment variables override):
+  docked_height  FOLD_DOCKED_HEIGHT  900..1100, default 1006 (the firmware's keyboard edge).
+                                     Lower keeps the desktop off the curved fold; above 1006 the
+                                     picture reaches under the keyboard. Re-read on every docking.
+  docked_scale   FOLD_DOCKED_SCALE   display scale while docked, default 1.5
 """
 import json
 import os
@@ -23,17 +30,17 @@ DOCK_ATTR = "/sys/bus/platform/devices/LEN009E:00/keyboard_docked"
 ACCEL_NAME = "accel_3d"
 TOUCH_NAME_SUBSTR = "Touch Host Controller Finger"
 FULL_SIZE = (1536, 2048)
-DOCKED_SIZE = (1536, 1006)
-
-DOCKED_SCALE = float(os.environ.get("FOLD_DOCKED_SCALE", "1.5"))
-# Docked touch: the visible strip covers this fraction of the digitizer's height
-# (calibrated on the reference unit: 1/1.98).
-DOCKED_TOUCH_YSCALE = float(os.environ.get("FOLD_DOCKED_TOUCH_YSCALE", "1.98"))
+DOCKED_DEFAULT_H = 1006          # advertised by the kernel; other heights are custom modes
+DOCKED_MIN_H, DOCKED_MAX_H = 900, 1100   # range the kernel accepts (patch 0045)
+CONFIG = os.path.expanduser("~/.config/thinkpad-fold-helper.conf")
+# Docked touch: at 1006 rows the visible strip covers 1/1.98 of the digitizer's height
+# (calibrated on the reference unit); it scales with the docked height.
+TOUCH_YSCALE_AT_DEFAULT = 1.98
 
 # The panel is mounted upside down: "upright" needs rotation "inverted". The touch baseline
 # cancels KWin's output-transform rotation of touch (the digitizer itself is upright).
 TOUCH_MATRIX_FULL = "-1,0,1,0,0,-1,1,0,0,0,1,0,0,0,0,1"
-TOUCH_MATRIX_DOCKED = "-1,0,1,0,0,-%g,1,0,0,0,1,0,0,0,0,1" % DOCKED_TOUCH_YSCALE
+TOUCH_MATRIX_DOCKED = "-1,0,1,0,0,-%g,1,0,0,0,1,0,0,0,0,1"   # % y scale
 DOCKED_ROTATION = "inverted"
 
 # Accelerometer (m/s^2, as read from sysfs) -> kscreen rotation, measured on the reference unit
@@ -43,6 +50,39 @@ POLL_ACCEL_S = 0.5
 
 def log(*a):
     print("thinkpad-fold-helper:", *a, file=sys.stderr, flush=True)
+
+
+def settings():
+    """docked_height, docked_scale, touch y scale from the config file and the environment."""
+    conf = {}
+    try:
+        with open(CONFIG) as f:
+            for line in f:
+                line = line.split("#", 1)[0].strip()
+                if "=" in line:
+                    k, v = (x.strip() for x in line.split("=", 1))
+                    conf[k] = v
+    except OSError:
+        pass
+
+    def get(key, env, default, conv):
+        raw = os.environ.get(env, conf.get(key))
+        if raw is None:
+            return default
+        try:
+            return conv(raw)
+        except ValueError:
+            log("ignoring invalid %s=%r" % (key, raw))
+            return default
+
+    h = get("docked_height", "FOLD_DOCKED_HEIGHT", DOCKED_DEFAULT_H, int)
+    if not DOCKED_MIN_H <= h <= DOCKED_MAX_H:
+        log("docked_height %d outside %d..%d, clamped" % (h, DOCKED_MIN_H, DOCKED_MAX_H))
+        h = min(max(h, DOCKED_MIN_H), DOCKED_MAX_H)
+    scale = get("docked_scale", "FOLD_DOCKED_SCALE", 1.5, float)
+    yscale = get("docked_touch_yscale", "FOLD_DOCKED_TOUCH_YSCALE",
+                 TOUCH_YSCALE_AT_DEFAULT * DOCKED_DEFAULT_H / h, float)
+    return h, scale, yscale
 
 
 def run(cmd, check=False):
@@ -149,15 +189,22 @@ class Helper:
             return False
         name = out["name"]
         if docked:
-            mid = mode_id(out, DOCKED_SIZE)
+            h, scale, yscale = settings()
+            mid = mode_id(out, (FULL_SIZE[0], h))
+            if mid is None and h != DOCKED_DEFAULT_H:
+                # the kernel accepts 1536 x 900..1100; KWin creates the mode on request
+                run(["kscreen-doctor", "output.%s.addCustomMode.%d.%d.60000.reduced"
+                     % (name, FULL_SIZE[0], h)], check=True)
+                out = panel_output() or out
+                mid = mode_id(out, (FULL_SIZE[0], h))
             if mid is None:
-                log("docked mode not offered by the kernel (patch 0023 missing?)")
+                log("no %dx%d docked mode (kernel patches 0023/0045 missing?)" % (FULL_SIZE[0], h))
                 return False
             if self.docked is not True and out.get("scale"):
                 self.saved_scale = out["scale"]
-            apply_output(name, ["mode.%s" % mid, "scale.%g" % DOCKED_SCALE,
+            apply_output(name, ["mode.%s" % mid, "scale.%g" % scale,
                                 "rotation.%s" % DOCKED_ROTATION])
-            set_touch_matrix(TOUCH_MATRIX_DOCKED)
+            set_touch_matrix(TOUCH_MATRIX_DOCKED % yscale)
             self.rotation = DOCKED_ROTATION
         else:
             mid = mode_id(out, FULL_SIZE)

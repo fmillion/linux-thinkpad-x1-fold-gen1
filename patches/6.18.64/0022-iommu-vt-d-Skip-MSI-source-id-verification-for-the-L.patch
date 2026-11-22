@@ -1,7 +1,7 @@
 From 6a451fff8d65f818238131d101fdcfd8e480dc2d Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 07:34:38 +0000
-Subject: [PATCH 22/44] iommu/vt-d: Skip MSI source-id verification for the
+Subject: [PATCH 22/45] iommu/vt-d: Skip MSI source-id verification for the
  Lakefield THC
 
 The Intel Touch Host Controller on Lakefield sends MSIs with a requester

@@ -1,7 +1,7 @@
 From 34c9ae78a19a96fc38e15ed6c6e8cccd5d4679c2 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 06:23:16 +0000
-Subject: [PATCH 08/44] drm/i915: Lakefield: optional i915 display via
+Subject: [PATCH 08/45] drm/i915: Lakefield: optional i915 display via
  i915.lkf_display
 
 Add the Lakefield ID to the display device table (driven with the EHL

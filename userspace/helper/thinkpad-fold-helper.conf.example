@@ -1,0 +1,9 @@
+# ~/.config/thinkpad-fold-helper.conf  (read by thinkpad-fold-helper each time the keyboard is docked)
+
+# Height of the desktop while the keyboard is docked on the screen, in panel pixels (900..1100).
+# 1006 is where the firmware says the keyboard begins; a lower value keeps the taskbar off the
+# curved fold, a higher one reaches under the keyboard.
+#docked_height = 1006
+
+# Display scale while docked (the undocked scale is restored on undocking).
+#docked_scale = 1.5

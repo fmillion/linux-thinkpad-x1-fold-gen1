@@ -1,0 +1,46 @@
+From cd98a272aa4e1f96a1090e5e1893b4c9714220f1 Mon Sep 17 00:00:00 2001
+From: fmillion <47171880+fmillion@users.noreply.github.com>
+Date: Sun, 22 Nov 2026 23:47:15 +0000
+Subject: [PATCH 45/45] drm/i915/dsi: X1 Fold: accept docked heights 900-1100
+
+The docked mode is scanned out 1:1 at the logical top edge by the pipe
+scaler; only its size and refresh rate matter (the panel keeps its native
+timings). Accept 1536 x 900..1100 at the panel refresh rate, so userspace
+can choose the docked height with a custom mode, e.g. to keep the taskbar
+off the curved fold above the keyboard. 1006 (the firmware's GDSZ edge)
+stays the advertised default.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/i915/display/intel_dsi.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/i915/display/intel_dsi.c b/drivers/gpu/drm/i915/display/intel_dsi.c
+index 74c360551..505d8eb7a 100644
+--- a/drivers/gpu/drm/i915/display/intel_dsi.c
++++ b/drivers/gpu/drm/i915/display/intel_dsi.c
+@@ -21,7 +21,10 @@
+  */
+ #define X1FOLD_PANEL_W	1536
+ #define X1FOLD_PANEL_H	2048
+-#define X1FOLD_DOCKED_H	1006
++#define X1FOLD_DOCKED_H	1006	/* advertised default: the firmware's GDSZ occlusion edge */
++/* heights userspace may choose (custom modes), e.g. to keep the desktop off the fold */
++#define X1FOLD_DOCKED_MIN_H	900
++#define X1FOLD_DOCKED_MAX_H	1100
+ 
+ static const struct dmi_system_id x1fold_dmi[] = {
+ 	{
+@@ -45,7 +48,8 @@ static bool x1fold_panel(struct intel_connector *connector)
+ bool intel_dsi_is_docked_mode(struct intel_connector *connector,
+ 			      int hdisplay, int vdisplay)
+ {
+-	return hdisplay == X1FOLD_PANEL_W && vdisplay == X1FOLD_DOCKED_H &&
++	return hdisplay == X1FOLD_PANEL_W &&
++		vdisplay >= X1FOLD_DOCKED_MIN_H && vdisplay <= X1FOLD_DOCKED_MAX_H &&
+ 		x1fold_panel(connector);
+ }
+ 
+-- 
+2.56.1
+

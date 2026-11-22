@@ -1,7 +1,7 @@
 From 72f94c55d25e9d7b04d7aa82eb99981ac2e5f192 Mon Sep 17 00:00:00 2001
 From: fmillion <47171880+fmillion@users.noreply.github.com>
 Date: Sun, 22 Nov 2026 21:15:38 +0000
-Subject: [PATCH 43/44] platform/x86: lenovo: add ThinkPad X1 Fold Gen 1
+Subject: [PATCH 43/45] platform/x86: lenovo: add ThinkPad X1 Fold Gen 1
  keyboard dock driver
 
 The X1 Fold Gen 1 describes its magnetic keyboard dock as ACPI device

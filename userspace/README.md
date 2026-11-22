@@ -11,6 +11,7 @@ Install these on a system running a kernel with `patches/6.18.64` applied.
 | `wireplumber/51-thinkpad-x1-fold.conf` | `/etc/wireplumber/wireplumber.conf.d/` | stable DMIC node name, hide codec input, "Speakers" / "External Display" sink names |
 | `pipewire/51-thinkpad-x1-fold-mic.conf` | `/etc/pipewire/pipewire.conf.d/` | "Built-in Microphones": 4 DMICs → mono, +18 dB, default source |
 | `helper/thinkpad-fold-helper` (+ `.desktop`) | `/usr/local/bin/`, `/etc/xdg/autostart/` | docked mode / rotation / touch-mapping policy |
+| `helper/thinkpad-fold-helper.conf.example` | `~/.config/thinkpad-fold-helper.conf` (optional) | docked height (900–1100) and scale |
 | `udev/61-thinkpad-x1-fold-hdmi-audio.rules` | `/etc/udev/rules.d/` | switch the display-audio outputs on (IEC958) |
 | `sysctl/90-thinkpad-x1-fold-lockup-debug.conf` | `/etc/sysctl.d/` | *optional debug aid*: lockup → panic → log in EFI pstore |
 | `sddm/10-thinkpad-x1-fold-wayland.conf` | `/etc/sddm.conf.d/` | Wayland (KWin) greeter: correct cursor on the upside-down panel |
