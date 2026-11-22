@@ -322,3 +322,12 @@ Patch series now (`patches/6.18.64/`): 0001–0002 upstream backports, 0003 ISH 
 - Plan: (a) enable ISH wakeup by default (udev rule) so lid-open wakes; (b) on resume, resync lid
   via `\_SB.LID0.UNLS` (from the Fold platform driver) so a missed event can't leave it stale;
   (c) later: investigate filtering non-lid ECLite wakes (what Windows' eclite.sys does in standby).
+
+### 11.3 2-minute lid-closed test (ISH wakeup enabled, on dock charger)
+- suspend 977.7 s → dark wake 980.1 s (event 0x11, power source / dock PD) → logind re-suspend
+  1009.8 s (holdoff) → stayed asleep 153 s → **lid open woke it (event 0x26)**, logind "Lid opened".
+- During suspend: **panel stays lit** (no i915 → nothing powers panel/backlight down; OLED
+  burn-in + power risk) and the power LED never pulses (likely no real S0ix: no GPU driver,
+  no LKF `intel_pmc_core`).
+- Added `userspace/udev/60-thinkpad-x1-fold.rules` (ISH `power/wakeup=enabled`) and lid resync
+  (`\_SB.LID0.UNLS`) in `lenovo-fold-dock` `.complete()` after resume.

@@ -229,13 +229,40 @@ static int fold_dock_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int fold_dock_resume(struct device *dev)
+static void fold_dock_resync_lid(struct fold_dock *fd)
 {
-	/* The keyboard may have been placed or removed while suspended. */
-	fold_dock_update(dev_get_drvdata(dev));
-	return 0;
+	acpi_status status;
+
+	/*
+	 * LID0._LID returns a cached value that the firmware only refreshes
+	 * when ECLite reports a lid event (via \_SB.LID0.UNLS) or in _WAK,
+	 * which is not run for suspend-to-idle. If the lid event was lost
+	 * while suspended, logind would keep seeing a closed lid and suspend
+	 * again. UNLS re-reads the hall sensor state from ECLite and issues
+	 * Notify(LID0, 0x80), so the ACPI button driver picks it up.
+	 */
+	status = acpi_evaluate_object(NULL, "\\_SB.LID0.UNLS", NULL, NULL);
+	if (ACPI_FAILURE(status) && status != AE_NOT_FOUND)
+		dev_dbg(fd->dev, "LID0.UNLS failed: %s\n",
+			acpi_format_exception(status));
 }
-static DEFINE_SIMPLE_DEV_PM_OPS(fold_dock_pm, NULL, fold_dock_resume);
+
+/*
+ * Use ->complete() rather than ->resume(): it runs after *all* devices have
+ * resumed, so the ISH and the ECLite client that GDST/UNLS depend on are back.
+ */
+static void fold_dock_complete(struct device *dev)
+{
+	struct fold_dock *fd = dev_get_drvdata(dev);
+
+	fold_dock_resync_lid(fd);
+	/* The keyboard may have been placed or removed while suspended. */
+	fold_dock_update(fd);
+}
+
+static const struct dev_pm_ops fold_dock_pm = {
+	.complete = fold_dock_complete,
+};
 
 static const struct acpi_device_id fold_dock_acpi_ids[] = {
 	{ "LEN009E" },

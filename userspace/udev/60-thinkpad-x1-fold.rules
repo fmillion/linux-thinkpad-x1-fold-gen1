@@ -1,0 +1,7 @@
+# Lenovo ThinkPad X1 Fold Gen 1 (Lakefield)
+#
+# All embedded-controller events (lid, power source, keyboard dock) are delivered by the
+# ECLite firmware through the Integrated Sensor Hub. Allow the ISH to wake the system from
+# suspend-to-idle so that opening the lid wakes the machine (as on Windows) and the lid state
+# seen by logind stays correct.
+ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x98fc", ATTR{power/wakeup}="enabled"
