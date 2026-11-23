@@ -9,7 +9,7 @@
 #
 # Prints PASS/WARN/FAIL per check and a summary; exits non-zero on any FAIL. Checks that need a
 # person (picture on the external monitor, keyboard wake, sound) are listed at the end.
-set -uo pipefail
+set -u   # no pipefail: "cmd | grep -q" would fail on SIGPIPE
 
 SUSPEND=0
 [[ ${1:-} = --suspend ]] && SUSPEND=1
