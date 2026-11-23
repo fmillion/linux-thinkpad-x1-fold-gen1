@@ -96,6 +96,8 @@ fi
 hdr "Wi-Fi / Bluetooth"
 check "Wi-Fi interface" test -n "$(ls -d /sys/class/net/*/wireless 2>/dev/null)"
 check "Bluetooth hci0" test -e /sys/class/bluetooth/hci0
+# the firmware download takes ~15-30 s after boot: wait for it when run that early
+for _ in $(seq 1 45); do klog | grep -q "hci0: Setup complete" && break; sleep 1; done
 klog | grep -q "hci0: Setup complete" && ok "Bluetooth firmware loaded" || bad "Bluetooth setup did not complete"
 n=$(klog | grep -c "resetting the controller\|resetting it (")
 (( n == 0 )) && ok "Bluetooth came up on the first try" || soft "Bluetooth needed $n setup retr(y/ies)"
