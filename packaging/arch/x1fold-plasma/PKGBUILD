@@ -3,7 +3,7 @@
 # Local/CI builds from a checkout: X1FOLD_REPO="git+file://$PWD/../../.." makepkg
 
 pkgname=x1fold-plasma
-pkgver=0.1.1
+pkgver=0.1.2
 pkgrel=1
 pkgdesc='KDE Plasma integration for the ThinkPad X1 Fold Gen 1 (keyboard dock mode, rotation, SDDM)'
 arch=(any)

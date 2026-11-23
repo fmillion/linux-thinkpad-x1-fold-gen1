@@ -52,7 +52,7 @@ def log(*a):
     print("thinkpad-fold-helper:", *a, file=sys.stderr, flush=True)
 
 
-def settings():
+def read_settings():
     """docked_height, docked_scale, touch y scale from the config file and the environment."""
     conf = {}
     try:
@@ -189,7 +189,7 @@ class Helper:
             return False
         name = out["name"]
         if docked:
-            h, scale, yscale = settings()
+            h, scale, yscale = read_settings()
             mid = mode_id(out, (FULL_SIZE[0], h))
             if mid is None and h != DOCKED_DEFAULT_H:
                 # the kernel accepts 1536 x 900..1100; KWin creates the mode on request
