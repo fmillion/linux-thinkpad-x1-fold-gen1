@@ -19,6 +19,8 @@
 #   X1FOLD_REPO_KEY   key id signing that repository (fetched from keyserver.ubuntu.com)
 #   X1FOLD_GIT        git URL of this project (default: GitHub)
 #   X1FOLD_REF        branch or tag to build from (default: main)
+#   X1FOLD_SST_FW_URL build the audio firmware from this copy of dsp_fw_release.bin (checksum-
+#                     pinned) instead of Lenovo's driver download
 #   X1FOLD_PLASMA     1/0: install the KDE Plasma integration (default: 1 if plasma is installed)
 #   X1FOLD_FORCE      1: skip the hardware check
 set -euo pipefail
@@ -69,7 +71,8 @@ sudo -u "$builder" git clone -q --depth 1 --branch "$X1FOLD_REF" "$X1FOLD_GIT" "
 build() { # build <package dir> -> prints the built package files
 	local d="$work/x1fold/packaging/arch/$1"
 	( cd "$d" && sudo -u "$builder" env X1FOLD_REPO="git+file://$work/x1fold" \
-		X1FOLD_REF="branch=$X1FOLD_REF" makepkg --syncdeps --noconfirm --force >&2 )
+		X1FOLD_REF="branch=$X1FOLD_REF" X1FOLD_SST_FW_URL="${X1FOLD_SST_FW_URL:-}" \
+		makepkg --syncdeps --noconfirm --force >&2 )
 	ls "$d"/*.pkg.tar.zst
 }
 # makepkg --syncdeps calls pacman through sudo as $builder: allow that for this run only
