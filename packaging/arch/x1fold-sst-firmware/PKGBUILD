@@ -1,8 +1,13 @@
 # Maintainer: fmillion <47171880+fmillion@users.noreply.github.com>
 # Intel SST (AVS) DSP base firmware for the ThinkPad X1 Fold Gen 1 (Lakefield), extracted from
 # Lenovo's public Windows audio driver package for this machine. The firmware is Intel's and is
-# not redistributed by this project: build this package on the target machine (do not host the
-# built package).
+# not redistributed publicly by this project: build this package on the target machine.
+#
+# linux-firmware's intel/avs/lkf/dsp_basefw.bin (10.28.00.12823, LICENCE.adsp_sst) does NOT boot
+# on this machine ("transfer fw failed: -110, status 0x80000012"), so this build is needed.
+#
+# Lenovo may move, gate or withdraw the driver package: X1FOLD_SST_FW_URL=<url or file://...>
+# builds from a copy of dsp_fw_release.bin we hold instead (same checksum and version check).
 
 pkgname=x1fold-sst-firmware
 pkgver=10.28.0.5995
@@ -13,15 +18,26 @@ url='https://pcsupport.lenovo.com/products/laptops-and-netbooks/thinkpad-x-serie
 license=(LicenseRef-Intel-proprietary)
 makedepends=(innoextract python)
 _pkg=n2pa115w   # "Realtek Audio Driver" 6.0.9225.1 (2025-07-09), contains Intel SST 10.28.00.6539
-source=("https://download.lenovo.com/pccbbs/mobiles/$_pkg.exe")
-noextract=("$_pkg.exe")
-sha256sums=('d266d6c712238d5fa90ce0f95d3d15d080ee9d92a2c9e63591995a399e722165')
+_fw_sha256=1d81fd4e80151906d367294ad44ccdfe6dca62550f0d1a00727decf734b61ecd
+if [[ -n ${X1FOLD_SST_FW_URL:-} ]]; then
+  source=("dsp_fw_release.bin::$X1FOLD_SST_FW_URL")
+  sha256sums=("$_fw_sha256")
+else
+  source=("https://download.lenovo.com/pccbbs/mobiles/$_pkg.exe")
+  noextract=("$_pkg.exe")
+  sha256sums=('d266d6c712238d5fa90ce0f95d3d15d080ee9d92a2c9e63591995a399e722165')
+fi
 
 _fw='code$GetExtractPath$/IntelHDASST/Fw/dsp_fw_release.bin'
 
 prepare() {
   rm -rf extract
-  innoextract -s -d extract -I "$_fw" "$_pkg.exe"
+  if [[ -n ${X1FOLD_SST_FW_URL:-} ]]; then
+    install -Dm644 dsp_fw_release.bin "extract/$_fw"
+  else
+    innoextract -s -d extract -I "$_fw" "$_pkg.exe"
+  fi
+  echo "$_fw_sha256  extract/$_fw" | sha256sum -c --quiet
   # check that this really is the expected firmware build
   python3 -I - "extract/$_fw" "$pkgver" <<'PY'
 import struct, sys

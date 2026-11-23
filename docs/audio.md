@@ -11,8 +11,11 @@
 - ACPI `HDAS.SNDW.SWD0..7` errors at boot are Intel reference-BIOS SoundWire placeholders.
 
 ## Firmware
-linux-firmware's `intel/avs/lkf/` is empty in Arch's `linux-firmware-intel` 20261019 (and the
-upstream LKF image is reportedly rejected by the CSE). Use the machine's own Windows SST package:
+Correction (2026-11-23): linux-firmware *does* ship `intel/avs/lkf/dsp_basefw.bin.zst`
+(10.28.00.12823, `LICENCE.adsp_sst`) — earlier we only looked for the uncompressed name. It does
+**not** boot on this machine: `transfer fw failed: -110, status: 0x80000012`, no sound cards. The
+Windows driver's 10.28.0.5995 works, so it is still needed: package `x1fold-sst-firmware` extracts it
+from Lenovo's `n2pa115w.exe` or builds from a held copy (`X1FOLD_SST_FW_URL`).
 `intcoed.inf_amd64_*/Fw/dsp_fw_release.bin` — on our unit two packages: FW **10.28.0.5995**
 (2021-06-30, driver 10.28.0.6539, active) and 10.28.0.4381 (too old). Install with
 `tools/extract-sst-firmware.sh <mounted Windows>` → `/usr/lib/firmware/updates/intel/avs/lkf/dsp_basefw.bin`.
